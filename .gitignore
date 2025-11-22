@@ -87,4 +87,6 @@ htmlcov/
  .env.test.local
  .env.production.local
 
-history_docs/backend/frida_servers/
+# Project-specific
+history_docs/
+backend/frida_servers/
