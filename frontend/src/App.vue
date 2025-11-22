@@ -5,7 +5,7 @@
       <div class="flex-1">
         <div class="flex items-center px-4">
           <div class="leading-tight">
-            <h1 class="brand-title text-2xl md:text-3xl font-extrabold tracking-[0.12em] text-[#7100d0] uppercase">
+            <h1 class="brand-title text-2xl md:text-3xl font-extrabold tracking-[0.12em] text-[#7100d0] uppercase cursor-pointer" @click="$router.push('/')">
               Epifania
             </h1>
             <p class="mt-1 text-xs md:text-sm text-slate-400 tracking-[0.18em] uppercase">
@@ -14,7 +14,23 @@
           </div>
         </div>
       </div>
-      <div class="flex-none px-4">
+      <div class="flex-none px-4 gap-4">
+        <!-- Frida Version Selector -->
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-400">Frida Version:</label>
+          <select 
+            v-model="selectedFridaVersion" 
+            class="select select-sm select-bordered bg-neutral-900 border-primary/30 focus:border-primary text-white"
+            @focus="loadFridaVersions"
+          >
+            <option value="" disabled>Select version</option>
+            <option v-for="version in fridaVersions" :key="version.version" :value="version.version">
+              {{ version.version }}
+            </option>
+          </select>
+        </div>
+        
+        <!-- ADB Status -->
         <div class="flex items-center gap-2">
           <div class="badge badge-sm" :class="adbConnected ? 'badge-success' : 'badge-error'">
             {{ adbConnected ? 'ADB Connected' : 'ADB Offline' }}
@@ -23,153 +39,22 @@
       </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="container mx-auto p-6 max-w-7xl">
-      <!-- Control Panel -->
-      <div class="card bg-neutral-900/60 backdrop-blur-sm shadow-2xl border border-primary/20 mb-6">
-        <div class="card-body">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 class="card-title text-2xl text-white mb-2">Device Manager</h2>
-              <p class="text-slate-400 text-sm">Manage connected Android devices and emulators</p>
-            </div>
-            <button 
-              class="btn btn-primary border-0 gap-2 transition active:scale-95 disabled:opacity-60 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7100d0]"
-              @click="scanDevices"
-              :disabled="loading"
-            >
-              <svg v-if="!loading" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <span v-if="loading" class="loading loading-spinner loading-sm"></span>
-              {{ loading ? 'Scanning...' : 'Scan Devices' }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Error Alert -->
-      <div v-if="error" class="alert alert-error mb-6 shadow-lg border border-red-500/50">
-        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <span>{{ error }}</span>
-      </div>
-
-      <!-- Devices Grid -->
-      <div v-if="devices.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div 
-          v-for="device in devices" 
-          :key="device.id"
-          class="device-card card bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20 hover:border-primary/40"
-        >
-          <div class="card-body">
-            <!-- Device Header -->
-            <div class="flex items-start justify-between mb-4">
-              <div class="flex items-center gap-3">
-                <div class="avatar placeholder">
-                  <div class="w-12 h-12 rounded-lg" :class="getDeviceColor(device.type)">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                </div>
-                <div>
-                  <h3 class="font-bold text-white text-lg">{{ device.name }}</h3>
-                  <p class="text-xs text-slate-400">{{ device.brand }} {{ device.model }}</p>
-                </div>
-              </div>
-              <div class="badge badge-sm" :class="getStatusBadge(device.state)">
-                {{ device.state }}
-              </div>
-            </div>
-
-            <!-- Device Info -->
-            <div class="space-y-2">
-              <div class="flex items-center justify-between text-sm">
-                <span class="text-slate-400">Serial</span>
-                <span class="text-white font-mono text-xs">{{ device.serial }}</span>
-              </div>
-              <div class="flex items-center justify-between text-sm">
-                <span class="text-slate-400">Android</span>
-                <span class="text-white">{{ device.android_version }} (SDK {{ device.sdk_version }})</span>
-              </div>
-              <div class="flex items-center justify-between text-sm">
-                <span class="text-slate-400">Architecture</span>
-                <span class="text-white font-mono">{{ device.architecture }}</span>
-              </div>
-              <div class="flex items-center justify-between text-sm">
-                <span class="text-slate-400">Type</span>
-                <span class="badge badge-sm badge-outline">{{ device.type }}</span>
-              </div>
-            </div>
-
-            <!-- Frida Status -->
-            <div class="divider my-2"></div>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-slate-400">Frida Status</span>
-              <div class="flex items-center gap-2">
-                <div 
-                  class="w-2 h-2 rounded-full status-indicator" 
-                  :class="device.frida_available ? 'bg-green-500' : 'bg-red-500'"
-                ></div>
-                <span class="text-xs" :class="device.frida_available ? 'text-green-400' : 'text-red-400'">
-                  {{ device.frida_available ? 'Available' : 'Not Available' }}
-                </span>
-              </div>
-            </div>
-
-            <!-- Actions -->
-            <div class="card-actions justify-end mt-4">
-              <button 
-                class="btn btn-sm btn-outline btn-primary transition active:scale-95 disabled:opacity-50" 
-                :disabled="!device.frida_available"
-                @click="connectToDevice(device)"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                Connect
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Empty State -->
-      <div v-else-if="!loading && scanned" class="card bg-neutral-900/40 backdrop-blur-sm shadow-xl border border-neutral-700/50">
-        <div class="card-body items-center text-center py-16">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-24 w-24 text-slate-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-          </svg>
-          <h3 class="text-xl font-bold text-slate-300 mb-2">No Devices Found</h3>
-          <p class="text-slate-500 max-w-md">
-            Connect an Android device via USB or start an emulator, then scan again.
-          </p>
-          <button 
-            class="btn btn-primary border-0 mt-6 transition active:scale-95"
-            @click="scanDevices"
-          >
-            Scan Again
-          </button>
-        </div>
-      </div>
-
-      <!-- Initial State -->
-      <div v-else-if="!scanned && !loading" class="card bg-neutral-900/40 backdrop-blur-sm shadow-xl border border-neutral-700/50">
-        <div class="card-body items-center text-center py-16">
-          <div class="w-24 h-24 bg-gradient-to-br from-[#7100d0]/20 to-black/20 rounded-full flex items-center justify-center mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-[#7100d0]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
-          <h3 class="text-xl font-bold text-slate-300 mb-2">Ready to Scan</h3>
-          <p class="text-slate-500 max-w-md">
-            Click the "Scan Devices" button to discover connected Android devices and emulators.
-          </p>
-        </div>
-      </div>
+    <!-- Warning Banner -->
+    <div class="alert alert-warning shadow-lg border-0 rounded-none bg-yellow-900/20 border-b border-yellow-700/30">
+      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      <span class="text-yellow-200 text-sm">
+        For best results, use emulators for Frida server installation. Physical devices may require manual setup or root access.
+      </span>
     </div>
+
+    <!-- Main Content -->
+    <router-view v-slot="{ Component }">
+      <transition name="fade" mode="out-in">
+        <component :is="Component" :selected-frida-version="selectedFridaVersion" />
+      </transition>
+    </router-view>
   </div>
 </template>
 
@@ -180,11 +65,9 @@ import axios from 'axios'
 export default {
   name: 'App',
   setup() {
-    const devices = ref([])
-    const loading = ref(false)
-    const error = ref(null)
-    const scanned = ref(false)
     const adbConnected = ref(false)
+    const fridaVersions = ref([])
+    const selectedFridaVersion = ref('')
 
     const checkHealth = async () => {
       try {
@@ -195,56 +78,46 @@ export default {
       }
     }
 
-    const scanDevices = async () => {
-      loading.value = true
-      error.value = null
+    const loadFridaVersions = async () => {
+      if (fridaVersions.value.length > 0) return
       
       try {
-        const response = await axios.get('http://localhost:8000/api/devices')
-        devices.value = response.data.devices
-        scanned.value = true
-        await checkHealth()
+        const response = await axios.get('http://localhost:8000/api/frida/versions')
+        fridaVersions.value = response.data.versions
+        
+        if (fridaVersions.value.length > 0 && !selectedFridaVersion.value) {
+          selectedFridaVersion.value = fridaVersions.value[0].version
+        }
       } catch (err) {
-        error.value = err.response?.data?.detail || 'Failed to connect to backend'
-        devices.value = []
-      } finally {
-        loading.value = false
+        console.error('Failed to load Frida versions:', err)
       }
-    }
-
-    const connectToDevice = async (device) => {
-      // Placeholder for future connection workflow
-      // Currently enabled only when Frida is available to indicate capability
-      console.log('Connect requested for', device?.serial)
-    }
-
-    const getDeviceColor = (type) => {
-      if (type === 'emulator') return 'bg-gradient-to-br from-[#7100d0] to-purple-700'
-      if (type === 'physical') return 'bg-gradient-to-br from-[#7100d0] to-black'
-      return 'bg-gradient-to-br from-slate-500 to-slate-600'
-    }
-
-    const getStatusBadge = (state) => {
-      if (state === 'online') return 'badge-success'
-      if (state === 'error') return 'badge-error'
-      return 'badge-warning'
     }
 
     onMounted(() => {
       checkHealth()
+      loadFridaVersions()
+      
+      setInterval(checkHealth, 10000)
     })
 
     return {
-      devices,
-      loading,
-      error,
-      scanned,
       adbConnected,
-      scanDevices,
-      connectToDevice,
-      getDeviceColor,
-      getStatusBadge
+      fridaVersions,
+      selectedFridaVersion,
+      loadFridaVersions
     }
   }
 }
 </script>
+
+<style>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

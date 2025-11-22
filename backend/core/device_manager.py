@@ -1,5 +1,5 @@
 import frida
-from typing import List, Dict
+from typing import List, Dict, Optional
 from core.logger import get_logger
 from core.adb_manager import ADBManager
 
@@ -41,4 +41,69 @@ class DeviceManager:
         except Exception as e:
             logger.error(f"Failed to enumerate devices: {str(e)}")
             raise RuntimeError(f"Failed to enumerate devices: {str(e)}")
+    
+    def get_device_details(self, device_serial: str) -> Optional[Dict[str, any]]:
+        try:
+            logger.info(f"Getting details for device {device_serial}")
+            
+            adb_devices = self.adb_manager.list_devices()
+            device_info = None
+            
+            for dev in adb_devices:
+                if dev["serial"] == device_serial:
+                    device_info = dev.copy()
+                    break
+            
+            if not device_info:
+                logger.warning(f"Device {device_serial} not found")
+                return None
+            
+            frida_devices = self.frida_manager.enumerate_devices()
+            frida_map = {d.id: d for d in frida_devices}
+            
+            if device_serial in frida_map:
+                device_info["frida_available"] = True
+                device_info["frida_name"] = frida_map[device_serial].name
+            else:
+                device_info["frida_available"] = False
+                device_info["frida_name"] = None
+            
+            logger.info(f"Retrieved details for device {device_serial}")
+            return device_info
+        except Exception as e:
+            logger.error(f"Failed to get device details for {device_serial}: {str(e)}")
+            return None
+    
+    def verify_device_connection(self, device_serial: str) -> Dict[str, any]:
+        try:
+            logger.info(f"Verifying connection for device {device_serial}")
+            
+            device = self.adb_manager.get_device(device_serial)
+            
+            if not device:
+                return {
+                    "connected": False,
+                    "message": "Device not found or not connected via ADB"
+                }
+            
+            result = device.shell("echo 'test'")
+            
+            if result and "test" in result:
+                logger.info(f"Device {device_serial} is connected and reachable")
+                return {
+                    "connected": True,
+                    "message": "Device is connected and reachable"
+                }
+            else:
+                logger.warning(f"Device {device_serial} connection test failed")
+                return {
+                    "connected": False,
+                    "message": "Device connection test failed"
+                }
+        except Exception as e:
+            logger.error(f"Failed to verify device connection: {str(e)}")
+            return {
+                "connected": False,
+                "message": f"Connection verification failed: {str(e)}"
+            }
 

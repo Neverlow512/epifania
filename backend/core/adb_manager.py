@@ -54,6 +54,9 @@ class ADBManager:
             if "emulator" in serial.lower():
                 device_type = "emulator"
             
+            # Check root access
+            has_root = self.check_root_access(device)
+            
             device_name = f"{brand} {model}".strip()
             if device_name == "Unknown Unknown":
                 device_name = serial
@@ -68,7 +71,8 @@ class ADBManager:
                 "sdk_version": sdk_version,
                 "architecture": abi,
                 "serial": serial,
-                "state": "online"
+                "state": "online",
+                "has_root": has_root
             }
         except Exception as e:
             logger.error(f"Failed to get device info for {device.serial}: {str(e)}")
@@ -82,7 +86,8 @@ class ADBManager:
                 "sdk_version": "Unknown",
                 "architecture": "Unknown",
                 "serial": device.serial,
-                "state": "error"
+                "state": "error",
+                "has_root": False
             }
     
     def _get_property(self, device, prop_name: str, default: str = "") -> str:
@@ -120,6 +125,18 @@ class ADBManager:
         except Exception as e:
             logger.error(f"Failed to execute shell command on {serial}: {str(e)}")
             return None
+    
+    def check_root_access(self, device) -> bool:
+        try:
+            result = device.shell("su -c 'id'")
+            if result and "uid=0" in result:
+                logger.info(f"Device {device.serial} has root access")
+                return True
+            logger.info(f"Device {device.serial} does not have root access")
+            return False
+        except Exception as e:
+            logger.debug(f"Root check failed for {device.serial}: {str(e)}")
+            return False
     
     def is_adb_available(self) -> bool:
         try:
