@@ -4,6 +4,7 @@ import sys
 import os
 import signal
 import time
+import platform
 from pathlib import Path
 
 
@@ -11,12 +12,27 @@ class Launcher:
     def __init__(self):
         self.processes = []
         self.project_root = Path(__file__).parent.resolve()
+        self.backend_dir = self.project_root / "backend"
+        self.venv_python = self._get_venv_python()
+        
+    def _get_venv_python(self):
+        if platform.system() == "Windows":
+            venv_python = self.backend_dir / "venv" / "Scripts" / "python.exe"
+        else:
+            venv_python = self.backend_dir / "venv" / "bin" / "python"
+        
+        if venv_python.exists():
+            return str(venv_python)
+        else:
+            print("[Launcher] Warning: Virtual environment not found. Using system Python.")
+            print("[Launcher] Run setup.sh (Linux/Mac) or setup.bat (Windows) first.")
+            return sys.executable
         
     def start_backend(self):
         print("[Launcher] Starting FastAPI backend on http://127.0.0.1:8000")
         backend_process = subprocess.Popen(
             [
-                sys.executable, "-m", "uvicorn",
+                self.venv_python, "-m", "uvicorn",
                 "backend.main:app",
                 "--reload",
                 "--host", "127.0.0.1",

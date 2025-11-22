@@ -27,6 +27,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+backend/venv/
+**/venv/
 
 # Node.js
 node_modules/
@@ -52,7 +54,8 @@ Desktop.ini
 
 # Logs
 *.log
-logs/
+logs/*.log
+!logs/.gitkeep
 
 # Testing
 .coverage

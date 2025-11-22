@@ -1,8 +1,9 @@
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-frida==16.2.1
-frida-tools==12.3.0
-requests==2.31.0
+fastapi==0.121.3
+uvicorn[standard]==0.38.0
+frida==17.5.1
+frida-tools==14.5.0
+requests==2.32.5
 pure-python-adb==0.3.0.dev0
-pydantic==2.5.3
+pydantic==2.12.4
+pydantic-settings==2.12.0
 

@@ -2,6 +2,23 @@
 
 A GUI-based Dynamic Instrumentation Platform wrapping Frida and ADB for security researchers.
 
+## Project Status
+
+**Current Stage:** Initial Development
+
+**Implemented Features:**
+- Backend API with FastAPI serving device enumeration endpoints
+- Frontend dashboard with Vue 3 and DaisyUI for device scanning
+- Frida integration for device detection
+- Comprehensive logging system with categorized log files
+- Virtual environment setup for Python and Node.js dependency isolation
+- Automated startup scripts for development environment
+
+**In Progress:**
+- Frida server auto-installation and updates
+- ADB integration for Android device management
+- Advanced device interaction capabilities
+
 ## Architecture
 
 Epifania is a local web-based tool designed for security analysis and dynamic instrumentation of mobile applications. The platform consists of two main components:
@@ -34,36 +51,69 @@ Before installing Epifania, ensure the following dependencies are installed:
 
 ## Installation
 
-### 1. Clone Repository
+### Quick Setup (Recommended)
+
+Use the automated setup script to create isolated virtual environments and install all dependencies:
+
+**Linux/macOS:**
+```bash
+git clone https://github.com/Neverlow512/epifania.git
+cd epifania
+./setup.sh
+```
+
+**Windows:**
+```cmd
+git clone https://github.com/Neverlow512/epifania.git
+cd epifania
+setup.bat
+```
+
+The setup script will:
+1. Create a Python virtual environment in `backend/venv`
+2. Install Python dependencies in isolation
+3. Configure Node.js version (if nvm is available)
+4. Install frontend dependencies in `frontend/node_modules`
+
+### Manual Setup
+
+If you prefer manual installation:
+
+#### 1. Clone Repository
 
 ```bash
 git clone https://github.com/Neverlow512/epifania.git
 cd epifania
 ```
 
-### 2. Install Backend Dependencies
+#### 2. Setup Backend (Python Virtual Environment)
 
 ```bash
-pip install -r backend/requirements.txt
-```
-
-For isolated environments, consider using a virtual environment:
-
-```bash
-python -m venv venv
+cd backend
+python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r backend/requirements.txt
+pip install --upgrade pip
+pip install -r requirements.txt
+deactivate
+cd ..
 ```
 
-### 3. Install Frontend Dependencies
+#### 3. Setup Frontend (Node.js)
 
+Optional: Use nvm for Node.js version management:
+```bash
+nvm install 20
+nvm use 20
+```
+
+Install dependencies:
 ```bash
 cd frontend
 npm install
 cd ..
 ```
 
-### 4. Run Application
+### Running the Application
 
 Execute the launcher script from the project root:
 
@@ -71,12 +121,29 @@ Execute the launcher script from the project root:
 python launcher.py
 ```
 
-The launcher will start both backend and frontend services concurrently:
+The launcher automatically uses the virtual environment and starts both services:
 
 - Backend API: http://127.0.0.1:8000
 - Frontend Dashboard: http://127.0.0.1:5173
 
 Access the dashboard in your browser at http://127.0.0.1:5173
+
+### Manual Service Execution
+
+Alternatively, run services independently:
+
+**Backend:**
+```bash
+cd backend
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm run dev
+```
 
 ## API Endpoints
 
@@ -153,11 +220,49 @@ The frontend uses Vue 3 Composition API:
 - `frontend/src/main.js`: Application entry point
 - `frontend/src/style.css`: Global styles and Tailwind imports
 
+### Dependency Management
+
+#### Python Dependencies
+
+All Python dependencies are isolated in `backend/venv/`. To update:
+
+```bash
+cd backend
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install --upgrade <package-name>
+pip freeze > requirements.txt
+deactivate
+```
+
+To update all packages:
+```bash
+pip list --outdated
+pip install --upgrade -r requirements.txt
+pip freeze > requirements.txt
+```
+
+#### Node.js Dependencies
+
+All Node.js dependencies are isolated in `frontend/node_modules/`. To update:
+
+```bash
+cd frontend
+npm update <package-name>
+```
+
+To update all packages to latest versions:
+```bash
+npm install -g npm-check-updates
+ncu -u
+npm install
+```
+
 ### Running Services Independently
 
 Backend only:
 ```bash
 cd backend
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
