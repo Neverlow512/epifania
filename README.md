@@ -9,10 +9,12 @@ A GUI-based Dynamic Instrumentation Platform wrapping Frida and ADB for security
 **Implemented Features:**
 - ✅ Full ADB integration for accurate Android device detection
 - ✅ Backend API with FastAPI serving comprehensive device information
-- ✅ Modern security research tool UI with dark theme and gradient accents
+- ✅ Professional security tool UI with refined dark theme (#7100d0 primary color)
 - ✅ Device enumeration with detailed specifications (brand, model, Android version, architecture)
 - ✅ Frida availability detection per device
 - ✅ Real-time ADB connection status monitoring
+- ✅ Interactive UI with button feedback, focus states, and disabled state handling
+- ✅ Responsive device cards with hover effects and status indicators
 - ✅ Comprehensive logging system with categorized log directories
 - ✅ Virtual environment setup for Python and Node.js dependency isolation
 - ✅ Automated startup scripts for development environment
@@ -37,14 +39,15 @@ The backend serves as the orchestration layer, managing device connections and F
 
 ### Frontend (Vue.js/Vite)
 
-The frontend provides a professional, modern dashboard designed for security researchers with a dark theme and purple-cyan gradient accents matching the Epifania brand.
+The frontend provides a professional, modern dashboard designed for security researchers with a refined dark theme centered around the Epifania brand color (#7100d0) and black backgrounds.
 
 - **Vue 3**: Progressive JavaScript framework with Composition API
 - **Vite**: Fast build tool and development server
 - **Tailwind CSS**: Utility-first CSS framework with custom security-focused design
-- **DaisyUI**: Component library for consistent UI elements
+- **DaisyUI**: Component library with custom Epifania dark theme
 - **Axios**: HTTP client for API communication
-- **Glassmorphism**: Modern UI effects with backdrop blur and gradients
+- **Modern Typography**: Space Grotesk display font for brand identity
+- **Interactive Feedback**: Button states with focus rings, press animations, and disabled states
 
 ## Prerequisites
 
@@ -267,15 +270,18 @@ The frontend uses Vue 3 Composition API with a modern, security-focused design:
 
 - `frontend/src/App.vue`: Main dashboard with device cards and management interface
 - `frontend/src/main.js`: Application entry point
-- `frontend/src/style.css`: Custom styles with purple-cyan gradient theme
+- `frontend/src/style.css`: Custom Epifania dark theme with DaisyUI integration
 
 **Design Features:**
-- Dark gradient background (slate-950 → slate-900)
-- Purple-to-cyan gradient accents throughout
-- Glassmorphism effects with backdrop blur
-- Animated status indicators
-- Responsive grid layout
+- Pure black background (#000000) with subtle transparency layers
+- Primary brand color (#7100d0) used consistently across interactive elements
+- Space Grotesk display font for brand identity (all-caps, tight letter spacing)
+- Interactive button states with press animations and focus rings
+- Glassmorphism effects with backdrop blur on cards and panels
+- Animated status indicators with pulse effects
+- Responsive grid layout adapting to screen sizes
 - Professional device cards with comprehensive information display
+- Disabled state handling for non-functional buttons (Connect requires Frida)
 
 ### Dependency Management
 

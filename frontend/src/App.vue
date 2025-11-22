@@ -1,19 +1,16 @@
 <template>
-  <div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+  <div class="min-h-screen bg-black">
     <!-- Header -->
-    <div class="navbar bg-slate-900/80 backdrop-blur-md shadow-xl border-b border-purple-500/20">
+    <div class="navbar bg-black/80 backdrop-blur-md shadow-xl border-b border-primary/20">
       <div class="flex-1">
-        <div class="flex items-center gap-3 px-4">
-          <div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-lg flex items-center justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-          </div>
-          <div>
-            <h1 class="text-2xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
+        <div class="flex items-center px-4">
+          <div class="leading-tight">
+            <h1 class="brand-title text-2xl md:text-3xl font-extrabold tracking-[0.12em] text-[#7100d0] uppercase">
               Epifania
             </h1>
-            <p class="text-xs text-slate-400">Dynamic Instrumentation Platform</p>
+            <p class="mt-1 text-xs md:text-sm text-slate-400 tracking-[0.18em] uppercase">
+              Dynamic Instrumentation Platform
+            </p>
           </div>
         </div>
       </div>
@@ -29,7 +26,7 @@
     <!-- Main Content -->
     <div class="container mx-auto p-6 max-w-7xl">
       <!-- Control Panel -->
-      <div class="card bg-slate-900/50 backdrop-blur-sm shadow-2xl border border-purple-500/20 mb-6">
+      <div class="card bg-neutral-900/60 backdrop-blur-sm shadow-2xl border border-primary/20 mb-6">
         <div class="card-body">
           <div class="flex items-center justify-between">
             <div>
@@ -37,7 +34,7 @@
               <p class="text-slate-400 text-sm">Manage connected Android devices and emulators</p>
             </div>
             <button 
-              class="btn btn-primary bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 border-0 gap-2"
+              class="btn btn-primary border-0 gap-2 transition active:scale-95 disabled:opacity-60 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7100d0]"
               @click="scanDevices"
               :disabled="loading"
             >
@@ -64,7 +61,7 @@
         <div 
           v-for="device in devices" 
           :key="device.id"
-          class="device-card card bg-slate-900/50 backdrop-blur-sm shadow-xl border border-purple-500/20 hover:border-purple-500/50"
+          class="device-card card bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20 hover:border-primary/40"
         >
           <div class="card-body">
             <!-- Device Header -->
@@ -124,7 +121,11 @@
 
             <!-- Actions -->
             <div class="card-actions justify-end mt-4">
-              <button class="btn btn-sm btn-outline btn-primary">
+              <button 
+                class="btn btn-sm btn-outline btn-primary transition active:scale-95 disabled:opacity-50" 
+                :disabled="!device.frida_available"
+                @click="connectToDevice(device)"
+              >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
@@ -136,7 +137,7 @@
       </div>
 
       <!-- Empty State -->
-      <div v-else-if="!loading && scanned" class="card bg-slate-900/30 backdrop-blur-sm shadow-xl border border-slate-700/50">
+      <div v-else-if="!loading && scanned" class="card bg-neutral-900/40 backdrop-blur-sm shadow-xl border border-neutral-700/50">
         <div class="card-body items-center text-center py-16">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-24 w-24 text-slate-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -146,7 +147,7 @@
             Connect an Android device via USB or start an emulator, then scan again.
           </p>
           <button 
-            class="btn btn-primary bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 border-0 mt-6"
+            class="btn btn-primary border-0 mt-6 transition active:scale-95"
             @click="scanDevices"
           >
             Scan Again
@@ -155,10 +156,10 @@
       </div>
 
       <!-- Initial State -->
-      <div v-else-if="!scanned && !loading" class="card bg-slate-900/30 backdrop-blur-sm shadow-xl border border-slate-700/50">
+      <div v-else-if="!scanned && !loading" class="card bg-neutral-900/40 backdrop-blur-sm shadow-xl border border-neutral-700/50">
         <div class="card-body items-center text-center py-16">
-          <div class="w-24 h-24 bg-gradient-to-br from-purple-500/20 to-cyan-500/20 rounded-full flex items-center justify-center mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div class="w-24 h-24 bg-gradient-to-br from-[#7100d0]/20 to-black/20 rounded-full flex items-center justify-center mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-[#7100d0]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
@@ -211,9 +212,15 @@ export default {
       }
     }
 
+    const connectToDevice = async (device) => {
+      // Placeholder for future connection workflow
+      // Currently enabled only when Frida is available to indicate capability
+      console.log('Connect requested for', device?.serial)
+    }
+
     const getDeviceColor = (type) => {
-      if (type === 'emulator') return 'bg-gradient-to-br from-cyan-500 to-blue-500'
-      if (type === 'physical') return 'bg-gradient-to-br from-purple-500 to-pink-500'
+      if (type === 'emulator') return 'bg-gradient-to-br from-[#7100d0] to-purple-700'
+      if (type === 'physical') return 'bg-gradient-to-br from-[#7100d0] to-black'
       return 'bg-gradient-to-br from-slate-500 to-slate-600'
     }
 
@@ -234,6 +241,7 @@ export default {
       scanned,
       adbConnected,
       scanDevices,
+      connectToDevice,
       getDeviceColor,
       getStatusBadge
     }
