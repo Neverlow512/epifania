@@ -1,10 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict
 from core.device_manager import DeviceManager
 from core.installer import Installer
 from core.logger import get_logger
+from core.log_streamer import log_streamer
+import asyncio
 
 logger = get_logger(__name__, "backend")
 
@@ -214,4 +216,81 @@ async def restart_frida(device_id: str):
     except Exception as e:
         logger.error(f"Failed to restart Frida server: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/devices/{device_id}/logs/{log_type}")
+async def get_device_logs(device_id: str, log_type: str):
+    try:
+        logger.info(f"Logs requested for device {device_id}, type {log_type}")
+        logs = log_streamer.get_logs(device_id, log_type)
+        return {"logs": logs}
+    except Exception as e:
+        logger.error(f"Failed to get logs: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.websocket("/ws/devices/{device_id}/logs")
+async def websocket_logs(websocket: WebSocket, device_id: str):
+    await websocket.accept()
+    logger.info(f"WebSocket connection established for device {device_id}")
+    
+    active_streams: Dict[str, bool] = {}
+    
+    async def send_log(dev_id: str, log_type: str, message: str, level: str):
+        try:
+            if dev_id == device_id and active_streams.get(log_type, False):
+                await websocket.send_json({
+                    "type": log_type,
+                    "level": level,
+                    "message": message,
+                    "timestamp": asyncio.get_event_loop().time()
+                })
+        except Exception as e:
+            logger.error(f"Error sending log via WebSocket: {str(e)}")
+    
+    try:
+        while True:
+            data = await websocket.receive_json()
+            action = data.get("action")
+            log_type = data.get("log_type")
+            
+            if action == "start" and log_type:
+                logger.info(f"Starting {log_type} stream for device {device_id}")
+                active_streams[log_type] = True
+                
+                # Send historical logs first
+                historical_logs = log_streamer.get_logs(device_id, log_type)
+                for log_entry in historical_logs:
+                    await websocket.send_json({
+                        "type": log_type,
+                        "level": log_entry.get("level", "info"),
+                        "message": log_entry.get("message", ""),
+                        "timestamp": log_entry.get("timestamp", "")
+                    })
+                
+                # Start streaming based on log type
+                if log_type == "logcat":
+                    asyncio.create_task(log_streamer.stream_logcat(
+                        device_id, 
+                        device_manager.adb_manager,
+                        send_log
+                    ))
+                
+            elif action == "stop" and log_type:
+                logger.info(f"Stopping {log_type} stream for device {device_id}")
+                active_streams[log_type] = False
+                log_streamer.stop_stream(device_id, log_type)
+                
+            elif action == "clear" and log_type:
+                logger.info(f"Clearing {log_type} logs for device {device_id}")
+                log_streamer.clear_logs(device_id, log_type)
+                
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected for device {device_id}")
+        for log_type in active_streams:
+            log_streamer.stop_stream(device_id, log_type)
+    except Exception as e:
+        logger.error(f"WebSocket error: {str(e)}")
+        for log_type in active_streams:
+            log_streamer.stop_stream(device_id, log_type)
 

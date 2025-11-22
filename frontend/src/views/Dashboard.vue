@@ -79,7 +79,7 @@
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import DeviceCard from '../components/DeviceCard.vue'
@@ -95,20 +95,55 @@ export default {
     const loading = ref(false)
     const error = ref(null)
     const scanned = ref(false)
+    let autoRefreshInterval = null
 
-    const scanDevices = async () => {
-      loading.value = true
+    const scanDevices = async (isAutoRefresh = false) => {
+      if (!isAutoRefresh) {
+        loading.value = true
+      }
       error.value = null
       
       try {
         const response = await axios.get('http://localhost:8000/api/devices')
-        devices.value = response.data.devices
+        const newDevices = response.data.devices
+        
+        // Merge with existing devices to maintain persistence
+        const deviceMap = new Map()
+        
+        // Add existing devices, mark as disconnected
+        devices.value.forEach(device => {
+          deviceMap.set(device.serial, { ...device, state: 'disconnected' })
+        })
+        
+        // Update with new devices or add new ones
+        newDevices.forEach(device => {
+          deviceMap.set(device.serial, device)
+        })
+        
+        devices.value = Array.from(deviceMap.values())
         scanned.value = true
       } catch (err) {
         error.value = err.response?.data?.detail || 'Failed to connect to backend'
-        devices.value = []
+        if (!isAutoRefresh) {
+          devices.value = []
+        }
       } finally {
-        loading.value = false
+        if (!isAutoRefresh) {
+          loading.value = false
+        }
+      }
+    }
+
+    const startAutoRefresh = () => {
+      autoRefreshInterval = setInterval(() => {
+        scanDevices(true)
+      }, 5000) // Refresh every 5 seconds
+    }
+
+    const stopAutoRefresh = () => {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval)
+        autoRefreshInterval = null
       }
     }
 
@@ -126,6 +161,14 @@ export default {
     const handleOpen = (device) => {
       router.push({ name: 'DeviceDetails', params: { id: device.serial } })
     }
+
+    onMounted(() => {
+      startAutoRefresh()
+    })
+
+    onUnmounted(() => {
+      stopAutoRefresh()
+    })
 
     return {
       devices,

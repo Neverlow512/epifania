@@ -8,6 +8,14 @@ from core.logger import get_logger
 
 logger = get_logger(__name__, "backend")
 
+# Import log_streamer for operation logging
+try:
+    from core.log_streamer import log_streamer
+    LOG_STREAMER_AVAILABLE = True
+except ImportError:
+    LOG_STREAMER_AVAILABLE = False
+    logger.warning("Log streamer not available")
+
 
 class Installer:
     def __init__(self, adb_manager=None):
@@ -111,7 +119,11 @@ class Installer:
             if not device:
                 return False
             
-            result = device.shell("ps | grep frida-server")
+            # Try multiple process listing methods for compatibility
+            result = device.shell("ps -A | grep frida-server")
+            if not result or "grep" in result:
+                result = device.shell("ps | grep frida-server")
+            
             running = result and "frida-server" in result and "grep" not in result
             
             if running:
@@ -168,30 +180,53 @@ class Installer:
         try:
             if not self.adb_manager:
                 logger.error("ADB manager not initialized")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "frida_install", "ADB manager not initialized", "error")
                 return False
             
             logger.info(f"Installing Frida server {version} on {device_serial}")
+            if LOG_STREAMER_AVAILABLE:
+                log_streamer.add_log(device_serial, "frida_install", f"Starting installation of Frida {version} for {architecture}", "info")
             
             frida_binary = self.download_frida_server(version, architecture)
             if not frida_binary:
                 logger.error("Failed to download Frida server")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "frida_install", "Failed to download Frida server", "error")
                 return False
+            
+            if LOG_STREAMER_AVAILABLE:
+                log_streamer.add_log(device_serial, "frida_install", f"Downloaded Frida server to {frida_binary}", "info")
             
             device = self.adb_manager.get_device(device_serial)
             if not device:
                 logger.error(f"Device {device_serial} not found")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "frida_install", f"Device {device_serial} not found", "error")
                 return False
             
             logger.info(f"Pushing Frida server to device")
+            if LOG_STREAMER_AVAILABLE:
+                log_streamer.add_log(device_serial, "frida_install", "Pushing Frida server to /data/local/tmp/frida-server", "info")
+                log_streamer.add_log(device_serial, "adb_operations", f"push {frida_binary} /data/local/tmp/frida-server", "info")
+            
             device.push(str(frida_binary), "/data/local/tmp/frida-server")
             
             logger.info(f"Setting executable permissions")
+            if LOG_STREAMER_AVAILABLE:
+                log_streamer.add_log(device_serial, "frida_install", "Setting executable permissions", "info")
+                log_streamer.add_log(device_serial, "adb_operations", "shell: chmod 755 /data/local/tmp/frida-server", "info")
+            
             device.shell("chmod 755 /data/local/tmp/frida-server")
             
             logger.info(f"Successfully installed Frida server {version} on {device_serial}")
+            if LOG_STREAMER_AVAILABLE:
+                log_streamer.add_log(device_serial, "frida_install", f"Successfully installed Frida server {version}", "info")
             return True
         except Exception as e:
             logger.error(f"Failed to install Frida server on {device_serial}: {str(e)}")
+            if LOG_STREAMER_AVAILABLE:
+                log_streamer.add_log(device_serial, "frida_install", f"Installation failed: {str(e)}", "error")
             return False
     
     def push_cached_server(self, device_serial: str, version: str, architecture: str) -> bool:
@@ -226,58 +261,108 @@ class Installer:
         try:
             if not self.adb_manager:
                 logger.error("ADB manager not initialized")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "frida_server", "ADB manager not initialized", "error")
                 return False
             
             if self.is_frida_server_running(device_serial):
                 logger.info(f"Frida server already running on {device_serial}")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "frida_server", "Frida server already running", "info")
                 return True
             
             device = self.adb_manager.get_device(device_serial)
             if not device:
                 logger.error(f"Device {device_serial} not found")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "frida_server", f"Device {device_serial} not found", "error")
                 return False
             
             logger.info(f"Starting Frida server on {device_serial}")
-            device.shell("/data/local/tmp/frida-server &")
+            if LOG_STREAMER_AVAILABLE:
+                log_streamer.add_log(device_serial, "frida_server", "Starting Frida server...", "info")
+            
+            # Try to start with root privileges first, fallback to non-root
+            try:
+                result = device.shell("su -c 'nohup /data/local/tmp/frida-server > /dev/null 2>&1 &'")
+                logger.debug(f"Started Frida server with root: {result}")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "frida_server", "Started with root privileges", "info")
+                    log_streamer.add_log(device_serial, "adb_operations", "shell: su -c 'nohup /data/local/tmp/frida-server > /dev/null 2>&1 &'", "info")
+            except:
+                logger.debug("Root start failed, trying without root")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "frida_server", "Root start failed, trying without root", "warning")
+                result = device.shell("nohup /data/local/tmp/frida-server > /dev/null 2>&1 &")
+                logger.debug(f"Started Frida server without root: {result}")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "adb_operations", "shell: nohup /data/local/tmp/frida-server > /dev/null 2>&1 &", "info")
             
             import time
             time.sleep(2)
             
             if self.is_frida_server_running(device_serial):
                 logger.info(f"Frida server started successfully on {device_serial}")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "frida_server", "Frida server started successfully", "info")
                 return True
             else:
                 logger.error(f"Frida server failed to start on {device_serial}")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "frida_server", "Frida server failed to start", "error")
                 return False
         except Exception as e:
             logger.error(f"Failed to start Frida server on {device_serial}: {str(e)}")
+            if LOG_STREAMER_AVAILABLE:
+                log_streamer.add_log(device_serial, "frida_server", f"Failed to start: {str(e)}", "error")
             return False
     
     def stop_frida_server(self, device_serial: str) -> bool:
         try:
             if not self.adb_manager:
                 logger.error("ADB manager not initialized")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "frida_server", "ADB manager not initialized", "error")
                 return False
             
             device = self.adb_manager.get_device(device_serial)
             if not device:
                 logger.error(f"Device {device_serial} not found")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "frida_server", f"Device {device_serial} not found", "error")
                 return False
             
             logger.info(f"Stopping Frida server on {device_serial}")
-            device.shell("killall frida-server")
+            if LOG_STREAMER_AVAILABLE:
+                log_streamer.add_log(device_serial, "frida_server", "Stopping Frida server...", "info")
+            
+            # Try with root first, then fallback
+            try:
+                device.shell("su -c 'killall frida-server'")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "adb_operations", "shell: su -c 'killall frida-server'", "info")
+            except:
+                device.shell("killall frida-server")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "adb_operations", "shell: killall frida-server", "info")
             
             import time
             time.sleep(1)
             
             if not self.is_frida_server_running(device_serial):
                 logger.info(f"Frida server stopped successfully on {device_serial}")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "frida_server", "Frida server stopped successfully", "info")
                 return True
             else:
                 logger.warning(f"Frida server may still be running on {device_serial}")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "frida_server", "Frida server may still be running", "warning")
                 return False
         except Exception as e:
             logger.error(f"Failed to stop Frida server on {device_serial}: {str(e)}")
+            if LOG_STREAMER_AVAILABLE:
+                log_streamer.add_log(device_serial, "frida_server", f"Failed to stop: {str(e)}", "error")
             return False
     
     def restart_frida_server(self, device_serial: str) -> bool:

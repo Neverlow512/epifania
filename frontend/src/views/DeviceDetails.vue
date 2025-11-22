@@ -98,7 +98,7 @@
             </div>
             <button 
               class="btn btn-sm btn-outline btn-primary mt-4 w-full"
-              @click="reconnectDevice"
+              @click.prevent="reconnectDevice"
               :disabled="reconnecting"
             >
               <span v-if="reconnecting" class="loading loading-spinner loading-xs"></span>
@@ -130,7 +130,7 @@
             </div>
             <button 
               class="btn btn-sm btn-outline btn-primary mt-4 w-full"
-              @click="refreshStatus"
+              @click.prevent="refreshStatus"
               :disabled="refreshing"
             >
               <svg v-if="!refreshing" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -156,7 +156,7 @@
             </p>
             <button 
               class="btn btn-primary gap-2"
-              @click="installFrida"
+              @click.prevent="installFrida"
               :disabled="installing || !selectedFridaVersion"
             >
               <svg v-if="!installing" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -188,7 +188,7 @@
               </select>
               <button 
                 class="btn btn-primary"
-                @click="pushCachedServer"
+                @click.prevent="pushCachedServer"
                 :disabled="pushing || !selectedCachedVersion"
               >
                 <span v-if="pushing" class="loading loading-spinner loading-sm"></span>
@@ -208,10 +208,10 @@
             <div class="flex gap-2 flex-wrap">
               <button 
                 class="btn btn-success gap-2"
-                @click="startFrida"
-                :disabled="starting || device.frida_server_running"
+                @click.prevent="startFrida"
+                :disabled="starting || (device && device.frida_server_running)"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg v-if="!starting" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -220,10 +220,10 @@
               </button>
               <button 
                 class="btn btn-error gap-2"
-                @click="stopFrida"
-                :disabled="stopping || !device.frida_server_running"
+                @click.prevent="stopFrida"
+                :disabled="stopping || (device && !device.frida_server_running)"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg v-if="!stopping" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
                 </svg>
@@ -232,10 +232,10 @@
               </button>
               <button 
                 class="btn btn-warning gap-2"
-                @click="restartFrida"
+                @click.prevent="restartFrida"
                 :disabled="restarting"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg v-if="!restarting" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 <span v-if="restarting" class="loading loading-spinner loading-sm"></span>
@@ -257,17 +257,11 @@
         <span>{{ statusMessage }}</span>
       </div>
 
+      <!-- Log Viewer -->
+      <LogViewer :device-id="deviceId" class="mb-6" />
+
       <!-- Placeholder Sections -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="card bg-neutral-900/40 backdrop-blur-sm shadow-xl border border-neutral-700/50">
-          <div class="card-body items-center text-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-600 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <h3 class="text-lg font-semibold text-slate-400">Logs</h3>
-            <p class="text-sm text-slate-500">Coming soon</p>
-          </div>
-        </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div class="card bg-neutral-900/40 backdrop-blur-sm shadow-xl border border-neutral-700/50">
           <div class="card-body items-center text-center">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-600 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -295,9 +289,13 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
+import LogViewer from '../components/LogViewer.vue'
 
 export default {
   name: 'DeviceDetails',
+  components: {
+    LogViewer
+  },
   props: {
     selectedFridaVersion: {
       type: String,

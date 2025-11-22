@@ -1,5 +1,5 @@
 <template>
-  <div class="device-card card bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20 hover:border-primary/40">
+  <div class="device-card card bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20 hover:border-primary/40" :class="{ 'opacity-50': device.state === 'disconnected' }">
     <div class="card-body">
       <!-- Device Header -->
       <div class="flex items-start justify-between mb-4">
@@ -114,6 +114,7 @@ export default {
 
     const getStatusBadge = (state) => {
       if (state === 'online') return 'badge-success'
+      if (state === 'disconnected') return 'badge-error'
       if (state === 'error') return 'badge-error'
       return 'badge-warning'
     }
