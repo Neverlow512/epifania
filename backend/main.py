@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from backend.core.device_manager import DeviceManager
-from backend.core.logger import get_logger
+from core.device_manager import DeviceManager
+from core.logger import get_logger
 
 logger = get_logger(__name__, "backend")
 

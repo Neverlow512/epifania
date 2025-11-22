@@ -35,7 +35,7 @@ fi
 echo "[Backend] Starting FastAPI on http://127.0.0.1:8000"
 cd "$BACKEND_DIR"
 source venv/bin/activate
-uvicorn main:app --reload --host 127.0.0.1 --port 8000 > "$PROJECT_ROOT/logs/uvicorn.log" 2>&1 &
+uvicorn main:app --reload --host 127.0.0.1 --port 8000 > "$PROJECT_ROOT/logs/server/uvicorn.log" 2>&1 &
 BACKEND_PID=$!
 deactivate
 cd "$PROJECT_ROOT"
@@ -44,7 +44,7 @@ sleep 2
 
 echo "[Frontend] Starting Vite dev server on http://127.0.0.1:5173"
 cd "$FRONTEND_DIR"
-npm run dev > "$PROJECT_ROOT/logs/vite.log" 2>&1 &
+npm run dev > "$PROJECT_ROOT/logs/server/vite.log" 2>&1 &
 FRONTEND_PID=$!
 cd "$PROJECT_ROOT"
 
@@ -60,11 +60,11 @@ echo "=========================================="
 echo ""
 echo "Logs:"
 echo "  Central:  tail -f logs/central.log"
-echo "  Backend:  tail -f logs/backend.log"
-echo "  Device:   tail -f logs/device.log"
-echo "  Errors:   tail -f logs/error.log"
-echo "  Uvicorn:  tail -f logs/uvicorn.log"
-echo "  Vite:     tail -f logs/vite.log"
+echo "  Backend:  tail -f logs/backend/backend.log"
+echo "  Device:   tail -f logs/device/device.log"
+echo "  Errors:   tail -f logs/backend/error.log"
+echo "  Uvicorn:  tail -f logs/server/uvicorn.log"
+echo "  Vite:     tail -f logs/server/vite.log"
 echo ""
 echo "Press Ctrl+C to stop all services"
 echo ""

@@ -6,13 +6,23 @@ from logging.handlers import RotatingFileHandler
 
 class EpifaniaLogger:
     def __init__(self, log_dir: str = "logs"):
-        self.log_dir = Path(log_dir)
+        project_root = Path(__file__).parent.parent.parent
+        self.log_dir = project_root / log_dir
         self.log_dir.mkdir(exist_ok=True)
         
+        self.backend_dir = self.log_dir / "backend"
+        self.backend_dir.mkdir(exist_ok=True)
+        
+        self.device_dir = self.log_dir / "device"
+        self.device_dir.mkdir(exist_ok=True)
+        
+        self.server_dir = self.log_dir / "server"
+        self.server_dir.mkdir(exist_ok=True)
+        
         self.central_log = self.log_dir / "central.log"
-        self.backend_log = self.log_dir / "backend.log"
-        self.device_log = self.log_dir / "device.log"
-        self.error_log = self.log_dir / "error.log"
+        self.backend_log = self.backend_dir / "backend.log"
+        self.device_log = self.device_dir / "device.log"
+        self.error_log = self.backend_dir / "error.log"
         
         self._setup_loggers()
     

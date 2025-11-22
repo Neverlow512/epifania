@@ -1,6 +1,6 @@
 import frida
 from typing import List, Dict
-from backend.core.logger import get_logger
+from core.logger import get_logger
 
 logger = get_logger(__name__, "device")
 

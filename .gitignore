@@ -55,6 +55,10 @@ Desktop.ini
 # Logs
 *.log
 logs/*.log
+logs/**/*.log
+logs/backend/
+logs/device/
+logs/server/
 !logs/.gitkeep
 
 # Testing
@@ -68,4 +72,19 @@ htmlcov/
 *.pyo
 *.pyd
 .Python
+ .cursor/
+ .cursorrules
+ .env
+ .env.local
+ .env.development.local
+ .env.test.local
+ .env.production.local
+ .env.development
+ .env.test
+ .env.production
+ .env.local
+ .env.development.local
+ .env.test.local
+ .env.production.local
 
+history_docs/
