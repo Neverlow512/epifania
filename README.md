@@ -4,20 +4,23 @@ A GUI-based Dynamic Instrumentation Platform wrapping Frida and ADB for security
 
 ## Project Status
 
-**Current Stage:** Initial Development
+**Current Stage:** Active Development
 
 **Implemented Features:**
-- Backend API with FastAPI serving device enumeration endpoints
-- Frontend dashboard with Vue 3 and DaisyUI for device scanning
-- Frida integration for device detection
-- Comprehensive logging system with categorized log files
-- Virtual environment setup for Python and Node.js dependency isolation
-- Automated startup scripts for development environment
+- ✅ Full ADB integration for accurate Android device detection
+- ✅ Backend API with FastAPI serving comprehensive device information
+- ✅ Modern security research tool UI with dark theme and gradient accents
+- ✅ Device enumeration with detailed specifications (brand, model, Android version, architecture)
+- ✅ Frida availability detection per device
+- ✅ Real-time ADB connection status monitoring
+- ✅ Comprehensive logging system with categorized log directories
+- ✅ Virtual environment setup for Python and Node.js dependency isolation
+- ✅ Automated startup scripts for development environment
 
 **In Progress:**
-- Frida server auto-installation and updates
-- ADB integration for Android device management
-- Advanced device interaction capabilities
+- 🔄 Frida server auto-installation and updates
+- 🔄 Advanced device interaction capabilities (process enumeration, app management)
+- 🔄 Script injection interface
 
 ## Architecture
 
@@ -25,20 +28,23 @@ Epifania is a local web-based tool designed for security analysis and dynamic in
 
 ### Backend (Python/FastAPI)
 
-The backend serves as the orchestration layer, managing device connections and Frida instrumentation. It provides a RESTful API for frontend communication.
+The backend serves as the orchestration layer, managing device connections and Frida instrumentation. It provides a RESTful API for frontend communication with full ADB integration.
 
 - **FastAPI**: High-performance web framework for API endpoints
 - **Frida**: Dynamic instrumentation toolkit for runtime analysis
-- **pure-python-adb**: Android Debug Bridge integration for device management
+- **pure-python-adb**: Full Android Debug Bridge integration for device management and communication
+- **Modular Architecture**: Separate managers for ADB, devices, and installation tasks
 
 ### Frontend (Vue.js/Vite)
 
-The frontend provides an intuitive dashboard for interacting with connected devices and managing instrumentation sessions.
+The frontend provides a professional, modern dashboard designed for security researchers with a dark theme and purple-cyan gradient accents matching the Epifania brand.
 
-- **Vue 3**: Progressive JavaScript framework for reactive UI
+- **Vue 3**: Progressive JavaScript framework with Composition API
 - **Vite**: Fast build tool and development server
-- **DaisyUI**: Component library built on Tailwind CSS
+- **Tailwind CSS**: Utility-first CSS framework with custom security-focused design
+- **DaisyUI**: Component library for consistent UI elements
 - **Axios**: HTTP client for API communication
+- **Glassmorphism**: Modern UI effects with backdrop blur and gradients
 
 ## Prerequisites
 
@@ -115,18 +121,26 @@ cd ..
 
 ### Running the Application
 
-Execute the launcher script from the project root:
+Execute the startup script from the project root:
 
+**Linux/macOS:**
+```bash
+./start.sh
+```
+
+**Windows:**
 ```bash
 python launcher.py
 ```
 
-The launcher automatically uses the virtual environment and starts both services:
+The script automatically uses the virtual environment and starts both services:
 
 - Backend API: http://127.0.0.1:8000
 - Frontend Dashboard: http://127.0.0.1:5173
 
 Access the dashboard in your browser at http://127.0.0.1:5173
+
+Logs are written to categorized directories in `logs/` for monitoring and debugging.
 
 ### Manual Service Execution
 
@@ -153,12 +167,13 @@ npm run dev
 GET /health
 ```
 
-Returns the operational status of the backend service.
+Returns the operational status of the backend service and ADB connection.
 
 **Response:**
 ```json
 {
-  "status": "healthy"
+  "status": "healthy",
+  "adb_connected": true
 }
 ```
 
@@ -168,21 +183,39 @@ Returns the operational status of the backend service.
 GET /api/devices
 ```
 
-Enumerates all devices accessible via Frida, including USB-connected Android devices and local system.
+Enumerates all Android devices and emulators connected via ADB with comprehensive device information and Frida availability status.
 
 **Response:**
 ```json
 {
   "devices": [
     {
-      "id": "local",
-      "name": "Local System",
-      "type": "local"
+      "id": "emulator-5554",
+      "name": "Google Pixel 3",
+      "type": "emulator",
+      "brand": "Google",
+      "model": "Pixel 3",
+      "android_version": "9",
+      "sdk_version": "28",
+      "architecture": "x86",
+      "serial": "emulator-5554",
+      "state": "online",
+      "frida_available": true,
+      "frida_name": "Pixel 3"
     },
     {
-      "id": "emulator-5554",
-      "name": "Android Emulator 5554",
-      "type": "usb"
+      "id": "1234567890ABCDEF",
+      "name": "Samsung Galaxy S21",
+      "type": "physical",
+      "brand": "Samsung",
+      "model": "SM-G991B",
+      "android_version": "13",
+      "sdk_version": "33",
+      "architecture": "arm64-v8a",
+      "serial": "1234567890ABCDEF",
+      "state": "online",
+      "frida_available": true,
+      "frida_name": "Galaxy S21"
     }
   ]
 }
@@ -205,20 +238,44 @@ Enumerates all devices accessible via Frida, including USB-connected Android dev
 
 ### Backend Development
 
-The backend follows a modular architecture:
+The backend follows a modular architecture with clear separation of concerns:
 
-- `backend/main.py`: FastAPI application entry point
-- `backend/core/device_manager.py`: Device enumeration and management
-- `backend/core/installer.py`: Frida server installation and updates
-- `backend/routers/`: API route handlers
+- `backend/main.py`: FastAPI application entry point with API endpoints
+- `backend/core/adb_manager.py`: ADB client wrapper for device communication
+- `backend/core/device_manager.py`: Device enumeration combining ADB and Frida data
+- `backend/core/installer.py`: Frida server installation and updates (stub)
+- `backend/core/logger.py`: Centralized logging with categorized output
+- `backend/routers/`: API route handlers (future expansion)
+
+### Logging Structure
+
+Logs are organized into categorized directories:
+
+- `logs/central.log`: Aggregated log of all important events
+- `logs/backend/`: Backend application logs
+  - `backend.log`: General backend operations
+  - `error.log`: Error-level logs only
+- `logs/device/`: Device management and ADB operations
+  - `device.log`: Device enumeration and communication
+- `logs/server/`: Server process logs
+  - `uvicorn.log`: FastAPI server output
+  - `vite.log`: Vite dev server output
 
 ### Frontend Development
 
-The frontend uses Vue 3 Composition API:
+The frontend uses Vue 3 Composition API with a modern, security-focused design:
 
-- `frontend/src/App.vue`: Main dashboard component
+- `frontend/src/App.vue`: Main dashboard with device cards and management interface
 - `frontend/src/main.js`: Application entry point
-- `frontend/src/style.css`: Global styles and Tailwind imports
+- `frontend/src/style.css`: Custom styles with purple-cyan gradient theme
+
+**Design Features:**
+- Dark gradient background (slate-950 → slate-900)
+- Purple-to-cyan gradient accents throughout
+- Glassmorphism effects with backdrop blur
+- Animated status indicators
+- Responsive grid layout
+- Professional device cards with comprehensive information display
 
 ### Dependency Management
 

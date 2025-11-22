@@ -28,7 +28,11 @@ device_manager = DeviceManager()
 @app.get("/health")
 async def health_check():
     logger.debug("Health check requested")
-    return {"status": "healthy"}
+    adb_available = device_manager.adb_manager.is_adb_available()
+    return {
+        "status": "healthy",
+        "adb_connected": adb_available
+    }
 
 
 @app.get("/api/devices")
