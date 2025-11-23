@@ -10,9 +10,10 @@
           <div class="collapse-title flex items-center justify-between">
             <div class="flex items-center gap-3">
               <button 
+                type="button"
                 class="btn btn-xs btn-circle"
                 :class="streamingLogs.logcat ? 'btn-error' : 'btn-success'"
-                @click.stop="toggleStream('logcat')"
+                @click.prevent.stop="toggleStream('logcat')"
               >
                 <svg v-if="!streamingLogs.logcat" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -41,8 +42,8 @@
               </div>
             </div>
             <div class="flex gap-2 mt-2">
-              <button class="btn btn-xs btn-ghost" @click="clearLogs('logcat')">Clear</button>
-              <button class="btn btn-xs btn-ghost" @click="scrollToBottom('logcat')">Scroll to Bottom</button>
+              <button type="button" class="btn btn-xs btn-ghost" @click.prevent.stop="clearLogs('logcat')">Clear</button>
+              <button type="button" class="btn btn-xs btn-ghost" @click.prevent.stop="scrollToBottom('logcat')">Scroll to Bottom</button>
             </div>
           </div>
         </div>
@@ -68,8 +69,8 @@
               </div>
             </div>
             <div class="flex gap-2 mt-2">
-              <button class="btn btn-xs btn-ghost" @click="clearLogs('frida_install')">Clear</button>
-              <button class="btn btn-xs btn-ghost" @click="scrollToBottom('frida_install')">Scroll to Bottom</button>
+              <button type="button" class="btn btn-xs btn-ghost" @click.prevent.stop="clearLogs('frida_install')">Clear</button>
+              <button type="button" class="btn btn-xs btn-ghost" @click.prevent.stop="scrollToBottom('frida_install')">Scroll to Bottom</button>
             </div>
           </div>
         </div>
@@ -95,8 +96,8 @@
               </div>
             </div>
             <div class="flex gap-2 mt-2">
-              <button class="btn btn-xs btn-ghost" @click="clearLogs('frida_server')">Clear</button>
-              <button class="btn btn-xs btn-ghost" @click="scrollToBottom('frida_server')">Scroll to Bottom</button>
+              <button type="button" class="btn btn-xs btn-ghost" @click.prevent.stop="clearLogs('frida_server')">Clear</button>
+              <button type="button" class="btn btn-xs btn-ghost" @click.prevent.stop="scrollToBottom('frida_server')">Scroll to Bottom</button>
             </div>
           </div>
         </div>
@@ -122,8 +123,8 @@
               </div>
             </div>
             <div class="flex gap-2 mt-2">
-              <button class="btn btn-xs btn-ghost" @click="clearLogs('adb_operations')">Clear</button>
-              <button class="btn btn-xs btn-ghost" @click="scrollToBottom('adb_operations')">Scroll to Bottom</button>
+              <button type="button" class="btn btn-xs btn-ghost" @click.prevent.stop="clearLogs('adb_operations')">Clear</button>
+              <button type="button" class="btn btn-xs btn-ghost" @click.prevent.stop="scrollToBottom('adb_operations')">Scroll to Bottom</button>
             </div>
           </div>
         </div>
@@ -172,6 +173,7 @@ export default {
 
     let ws = null
     let reconnectTimeout = null
+    let wsReadyResolvers = []
 
     const connectWebSocket = () => {
       if (ws && ws.readyState === WebSocket.OPEN) {
@@ -182,6 +184,8 @@ export default {
 
       ws.onopen = () => {
         console.log('WebSocket connected')
+        wsReadyResolvers.forEach((resolve) => resolve())
+        wsReadyResolvers = []
       }
 
       ws.onmessage = (event) => {
@@ -216,6 +220,18 @@ export default {
       }
     }
 
+    const ensureWebSocketReady = (timeout = 2000) => {
+      return new Promise((resolve) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          resolve()
+        } else {
+          connectWebSocket()
+          wsReadyResolvers.push(resolve)
+          setTimeout(resolve, timeout)
+        }
+      })
+    }
+
     const toggleStream = (logType) => {
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         connectWebSocket()
@@ -235,9 +251,26 @@ export default {
 
     const handleToggle = (logType) => {
       if (expandedLogs[logType]) {
+        // Auto start subscription for non-logcat logs on expand
+        if (logType !== 'logcat' && !streamingLogs[logType]) {
+          ensureWebSocketReady().then(() => {
+            try {
+              ws.send(JSON.stringify({ action: 'start', log_type: logType }))
+              streamingLogs[logType] = true
+            } catch {}
+          })
+        }
         nextTick(() => {
           scrollToBottom(logType)
         })
+      } else {
+        // Stop subscription on collapse
+        if (logType !== 'logcat' && streamingLogs[logType] && ws && ws.readyState === WebSocket.OPEN) {
+          try {
+            ws.send(JSON.stringify({ action: 'stop', log_type: logType }))
+          } catch {}
+          streamingLogs[logType] = false
+        }
       }
     }
 

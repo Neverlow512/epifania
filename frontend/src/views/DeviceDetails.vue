@@ -2,8 +2,9 @@
   <div class="container mx-auto p-6 max-w-7xl">
     <!-- Back Button -->
     <button 
+      type="button"
       class="btn btn-sm btn-ghost text-slate-400 hover:text-white mb-4"
-      @click="$router.push('/')"
+      @click.prevent.stop="$router.push('/')"
     >
       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -97,8 +98,9 @@
               </div>
             </div>
             <button 
+              type="button"
               class="btn btn-sm btn-outline btn-primary mt-4 w-full"
-              @click.prevent="reconnectDevice"
+              @click.prevent.stop="reconnectDevice"
               :disabled="reconnecting"
             >
               <span v-if="reconnecting" class="loading loading-spinner loading-xs"></span>
@@ -129,8 +131,9 @@
               </div>
             </div>
             <button 
+              type="button"
               class="btn btn-sm btn-outline btn-primary mt-4 w-full"
-              @click.prevent="refreshStatus"
+              @click.prevent.stop="refreshStatus"
               :disabled="refreshing"
             >
               <svg v-if="!refreshing" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -155,8 +158,9 @@
               Install the selected Frida version from the top menu. The server will be downloaded, pushed to the device, and started automatically.
             </p>
             <button 
+              type="button"
               class="btn btn-primary gap-2"
-              @click.prevent="installFrida"
+              @click.prevent.stop="installFrida"
               :disabled="installing || !selectedFridaVersion"
             >
               <svg v-if="!installing" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -187,8 +191,9 @@
                 </option>
               </select>
               <button 
+                type="button"
                 class="btn btn-primary"
-                @click.prevent="pushCachedServer"
+                @click.prevent.stop="pushCachedServer"
                 :disabled="pushing || !selectedCachedVersion"
               >
                 <span v-if="pushing" class="loading loading-spinner loading-sm"></span>
@@ -207,8 +212,9 @@
             </p>
             <div class="flex gap-2 flex-wrap">
               <button 
+                type="button"
                 class="btn btn-success gap-2"
-                @click.prevent="startFrida"
+                @click.prevent.stop="startFrida"
                 :disabled="starting || (device && device.frida_server_running)"
               >
                 <svg v-if="!starting" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -219,8 +225,9 @@
                 {{ starting ? 'Starting...' : 'Start Server' }}
               </button>
               <button 
+                type="button"
                 class="btn btn-error gap-2"
-                @click.prevent="stopFrida"
+                @click.prevent.stop="stopFrida"
                 :disabled="stopping || (device && !device.frida_server_running)"
               >
                 <svg v-if="!stopping" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -231,8 +238,9 @@
                 {{ stopping ? 'Stopping...' : 'Stop Server' }}
               </button>
               <button 
+                type="button"
                 class="btn btn-warning gap-2"
-                @click.prevent="restartFrida"
+                @click.prevent.stop="restartFrida"
                 :disabled="restarting"
               >
                 <svg v-if="!restarting" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -258,7 +266,7 @@
       </div>
 
       <!-- Log Viewer -->
-      <LogViewer :device-id="deviceId" class="mb-6" />
+      <LogViewer v-if="device" :device-id="device.serial" class="mb-6" />
 
       <!-- Placeholder Sections -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -329,22 +337,26 @@ export default {
       }, 5000)
     }
 
-    const loadDeviceDetails = async () => {
+    const loadDeviceDetails = async (showLoading = true) => {
       try {
-        loading.value = true
+        if (showLoading) {
+          loading.value = true
+        }
         const response = await axios.get(`http://localhost:8000/api/devices/${deviceId.value}`)
         device.value = response.data
       } catch (err) {
         console.error('Failed to load device details:', err)
         device.value = null
       } finally {
-        loading.value = false
+        if (showLoading) {
+          loading.value = false
+        }
       }
     }
 
     const refreshStatus = async () => {
       refreshing.value = true
-      await loadDeviceDetails()
+      await loadDeviceDetails(false)
       refreshing.value = false
     }
 
@@ -354,7 +366,7 @@ export default {
         const response = await axios.post(`http://localhost:8000/api/devices/${deviceId.value}/connect`)
         adbConnected.value = response.data.connected
         showStatus(response.data.message, response.data.connected ? 'success' : 'error')
-        await loadDeviceDetails()
+        await loadDeviceDetails(false)
       } catch (err) {
         showStatus('Failed to reconnect device', 'error')
       } finally {
@@ -386,7 +398,7 @@ export default {
           { version: props.selectedFridaVersion }
         )
         showStatus(response.data.message, 'success')
-        await loadDeviceDetails()
+        await loadDeviceDetails(false)
       } catch (err) {
         showStatus(err.response?.data?.detail || 'Failed to install Frida server', 'error')
       } finally {
@@ -415,7 +427,7 @@ export default {
           }
         )
         showStatus(response.data.message, 'success')
-        await loadDeviceDetails()
+        await loadDeviceDetails(false)
       } catch (err) {
         showStatus(err.response?.data?.detail || 'Failed to push Frida server', 'error')
       } finally {
@@ -428,7 +440,7 @@ export default {
         starting.value = true
         const response = await axios.post(`http://localhost:8000/api/devices/${deviceId.value}/frida/start`)
         showStatus(response.data.message, 'success')
-        await loadDeviceDetails()
+        await loadDeviceDetails(false)
       } catch (err) {
         showStatus(err.response?.data?.detail || 'Failed to start Frida server', 'error')
       } finally {
@@ -441,7 +453,7 @@ export default {
         stopping.value = true
         const response = await axios.post(`http://localhost:8000/api/devices/${deviceId.value}/frida/stop`)
         showStatus(response.data.message, 'success')
-        await loadDeviceDetails()
+        await loadDeviceDetails(false)
       } catch (err) {
         showStatus(err.response?.data?.detail || 'Failed to stop Frida server', 'error')
       } finally {
@@ -454,7 +466,7 @@ export default {
         restarting.value = true
         const response = await axios.post(`http://localhost:8000/api/devices/${deviceId.value}/frida/restart`)
         showStatus(response.data.message, 'success')
-        await loadDeviceDetails()
+        await loadDeviceDetails(false)
       } catch (err) {
         showStatus(err.response?.data?.detail || 'Failed to restart Frida server', 'error')
       } finally {

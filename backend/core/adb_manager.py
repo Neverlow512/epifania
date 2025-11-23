@@ -1,6 +1,11 @@
 from ppadb.client import Client as AdbClient
 from typing import List, Dict, Optional
 from core.logger import get_logger
+try:
+    from core.log_streamer import log_streamer
+    LOG_STREAMER_AVAILABLE = True
+except Exception:
+    LOG_STREAMER_AVAILABLE = False
 
 logger = get_logger(__name__, "device")
 
@@ -48,11 +53,35 @@ class ADBManager:
             android_version = self._get_property(device, "ro.build.version.release", "Unknown")
             sdk_version = self._get_property(device, "ro.build.version.sdk", "Unknown")
             abi = self._get_property(device, "ro.product.cpu.abi", "Unknown")
+            manufacturer = self._get_property(device, "ro.product.manufacturer", "Unknown")
+            characteristics = self._get_property(device, "ro.build.characteristics", "")
+            hardware = self._get_property(device, "ro.hardware", "")
+            kernel_qemu = self._get_property(device, "ro.kernel.qemu", "0")
+            boot_qemu = self._get_property(device, "ro.boot.qemu", "0")
             
             # Determine device type
             device_type = "physical"
-            if "emulator" in serial.lower():
-                device_type = "emulator"
+            try:
+                lower_serial = serial.lower()
+                lower_manu = manufacturer.lower()
+                lower_char = characteristics.lower()
+                lower_hw = hardware.lower()
+                
+                is_qemu = kernel_qemu.strip() == "1" or boot_qemu.strip() == "1"
+                looks_like_emulator = any([
+                    "emulator" in lower_serial,
+                    lower_serial.startswith("127.0.0.1:"),
+                    lower_serial.startswith("localhost:"),
+                    "emulator" in lower_char or "sdk" in lower_char,
+                    "goldfish" in lower_hw or "ranchu" in lower_hw,
+                    any(v in lower_manu for v in ["genymotion", "bluestacks", "virtualbox", "nox", "mumu", "ldplayer"])
+                ])
+                
+                if is_qemu or looks_like_emulator:
+                    device_type = "emulator"
+            except Exception:
+                # Default to previously determined type on any detection error
+                pass
             
             # Check root access
             has_root = self.check_root_access(device)
@@ -72,7 +101,8 @@ class ADBManager:
                 "architecture": abi,
                 "serial": serial,
                 "state": "online",
-                "has_root": has_root
+                "has_root": has_root,
+                "manufacturer": manufacturer
             }
         except Exception as e:
             logger.error(f"Failed to get device info for {device.serial}: {str(e)}")
@@ -119,6 +149,8 @@ class ADBManager:
             device = self.get_device(serial)
             if device:
                 result = device.shell(command)
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(serial, "adb_operations", f"shell: {command}", "debug")
                 logger.debug(f"Executed command on {serial}: {command}")
                 return result
             return None

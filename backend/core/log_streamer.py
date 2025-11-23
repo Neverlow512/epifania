@@ -1,7 +1,8 @@
 import asyncio
 import threading
+import subprocess
 from collections import deque
-from typing import Dict, List, Optional, Callable
+from typing import Dict, List, Optional, Callable, Tuple
 from datetime import datetime
 from core.logger import get_logger
 
@@ -12,10 +13,16 @@ class LogBuffer:
     def __init__(self, max_size: int = 1000):
         self.buffer = deque(maxlen=max_size)
         self.lock = threading.Lock()
+        self._last_message: Optional[str] = None
     
     def add(self, log_entry: Dict):
         with self.lock:
+            # Deduplicate consecutive identical messages
+            msg = log_entry.get("message", "")
+            if self._last_message is not None and self._last_message == msg:
+                return
             self.buffer.append(log_entry)
+            self._last_message = msg
     
     def get_all(self) -> List[Dict]:
         with self.lock:
@@ -31,6 +38,8 @@ class LogStreamer:
         self.device_logs: Dict[str, Dict[str, LogBuffer]] = {}
         self.active_streams: Dict[str, Dict[str, bool]] = {}
         self.stream_tasks: Dict[str, Dict[str, asyncio.Task]] = {}
+        self.stream_processes: Dict[str, Dict[str, subprocess.Popen]] = {}
+        self.subscribers: Dict[str, Dict[str, List[Tuple[asyncio.AbstractEventLoop, Callable]]]] = {}
         logger.info("LogStreamer initialized")
     
     def get_or_create_buffer(self, device_id: str, log_type: str) -> LogBuffer:
@@ -38,9 +47,48 @@ class LogStreamer:
             self.device_logs[device_id] = {}
         
         if log_type not in self.device_logs[device_id]:
-            self.device_logs[device_id][log_type] = LogBuffer()
+            # Tighter bounds to limit memory growth
+            max_size = 500 if log_type == "logcat" else 300
+            self.device_logs[device_id][log_type] = LogBuffer(max_size=max_size)
         
         return self.device_logs[device_id][log_type]
+    
+    def register_subscriber(self, device_id: str, log_type: str, loop: asyncio.AbstractEventLoop, callback: Callable):
+        if device_id not in self.subscribers:
+            self.subscribers[device_id] = {}
+        if log_type not in self.subscribers[device_id]:
+            self.subscribers[device_id][log_type] = []
+        self.subscribers[device_id][log_type].append((loop, callback))
+    
+    def unregister_subscriber(self, device_id: str, log_type: str, callback: Optional[Callable] = None):
+        try:
+            subs = self.subscribers.get(device_id, {}).get(log_type, [])
+            if callback is None:
+                self.subscribers.get(device_id, {}).pop(log_type, None)
+            else:
+                self.subscribers[device_id][log_type] = [(lp, cb) for (lp, cb) in subs if cb != callback]
+        except Exception:
+            pass
+    
+    def _notify_subscribers(self, device_id: str, log_type: str, message: str, level: str, timestamp: str):
+        subs = self.subscribers.get(device_id, {}).get(log_type, [])
+        if not subs:
+            return
+        payload = {
+            "type": log_type,
+            "level": level,
+            "message": message,
+            "timestamp": timestamp
+        }
+        for loop, callback in list(subs):
+            try:
+                fut = asyncio.run_coroutine_threadsafe(
+                    callback(payload),
+                    loop
+                )
+                # Avoid blocking; do not call result() here
+            except Exception:
+                continue
     
     def add_log(self, device_id: str, log_type: str, message: str, level: str = "info"):
         buffer = self.get_or_create_buffer(device_id, log_type)
@@ -50,6 +98,7 @@ class LogStreamer:
             "message": message
         }
         buffer.add(log_entry)
+        self._notify_subscribers(device_id, log_type, message, level, log_entry["timestamp"])
     
     def get_logs(self, device_id: str, log_type: str) -> List[Dict]:
         if device_id not in self.device_logs:
@@ -74,42 +123,81 @@ class LogStreamer:
             self.active_streams[device_id] = {}
         self.active_streams[device_id][log_type] = active
     
-    async def stream_logcat(self, device_id: str, adb_manager, callback: Callable):
+    def _parse_level_from_logcat(self, line: str) -> str:
+        if " E " in line or " E/" in line:
+            return "error"
+        if " W " in line or " W/" in line:
+            return "warning"
+        if " D " in line or " D/" in line:
+            return "debug"
+        return "info"
+    
+    def fetch_logcat_history(self, device_id: str, adb_manager, max_lines: int = 500):
+        try:
+            device = adb_manager.get_device(device_id)
+            if not device:
+                logger.error(f"Device {device_id} not found for logcat history")
+                return
+            
+            # Try to get last N lines using -t, fallback to full dump
+            history = device.shell(f"logcat -d -v time -b all -t {max_lines}")
+            if not history or "unknown option" in history.lower():
+                history = device.shell("logcat -d -v time -b all")
+                if history:
+                    lines = history.splitlines()[-max_lines:]
+                else:
+                    lines = []
+            else:
+                lines = history.splitlines()
+            
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                level = self._parse_level_from_logcat(line)
+                self.add_log(device_id, "logcat", line, level)
+        except Exception as e:
+            logger.error(f"Failed to fetch logcat history for {device_id}: {str(e)}")
+    
+    async def stream_logcat(self, device_id: str, adb_manager, loop: asyncio.AbstractEventLoop):
         try:
             logger.info(f"Starting logcat stream for device {device_id}")
             self.set_streaming(device_id, "logcat", True)
             
-            device = adb_manager.get_device(device_id)
-            if not device:
-                logger.error(f"Device {device_id} not found for logcat streaming")
-                return
-            
-            # Start logcat in a separate thread to avoid blocking
+            # Start logcat in a separate thread using adb subprocess for reliable streaming
             def read_logcat():
                 try:
-                    # Clear old logs first
-                    device.shell("logcat -c")
+                    cmd = ["adb", "-s", device_id, "logcat", "-v", "time", "-b", "all"]
+                    process = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        bufsize=1,
+                        universal_newlines=True
+                    )
+                    if device_id not in self.stream_processes:
+                        self.stream_processes[device_id] = {}
+                    self.stream_processes[device_id]["logcat"] = process
                     
-                    # Stream logcat
-                    process = device.shell("logcat", timeout=None)
-                    for line in process.split('\n'):
+                    for line in iter(process.stdout.readline, ''):
                         if not self.is_streaming(device_id, "logcat"):
                             break
-                        
-                        if line.strip():
-                            # Parse log level
-                            level = "info"
-                            if " E " in line or " E/" in line:
-                                level = "error"
-                            elif " W " in line or " W/" in line:
-                                level = "warning"
-                            elif " D " in line or " D/" in line:
-                                level = "debug"
-                            
-                            self.add_log(device_id, "logcat", line.strip(), level)
-                            asyncio.run(callback(device_id, "logcat", line.strip(), level))
+                        if not line:
+                            continue
+                        line = line.strip()
+                        if not line:
+                            continue
+                        level = self._parse_level_from_logcat(line)
+                        self.add_log(device_id, "logcat", line, level)
                 except Exception as e:
                     logger.error(f"Error in logcat stream: {str(e)}")
+                finally:
+                    try:
+                        proc = self.stream_processes.get(device_id, {}).get("logcat")
+                        if proc and proc.poll() is None:
+                            proc.terminate()
+                    except Exception:
+                        pass
             
             thread = threading.Thread(target=read_logcat, daemon=True)
             thread.start()
@@ -126,6 +214,13 @@ class LogStreamer:
             task = self.stream_tasks[device_id][log_type]
             if not task.done():
                 task.cancel()
+        
+        try:
+            proc = self.stream_processes.get(device_id, {}).get(log_type)
+            if proc and proc.poll() is None:
+                proc.terminate()
+        except Exception:
+            pass
 
 
 log_streamer = LogStreamer()

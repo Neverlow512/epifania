@@ -73,8 +73,9 @@
       <!-- Actions -->
       <div class="card-actions justify-end mt-4 gap-2">
         <button 
+          type="button"
           class="btn btn-sm btn-outline btn-primary transition active:scale-95"
-          @click="$emit('connect', device)"
+          @click.prevent.stop="$emit('connect', device)"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -82,8 +83,9 @@
           Connect
         </button>
         <button 
+          type="button"
           class="btn btn-sm btn-primary transition active:scale-95"
-          @click="$emit('open', device)"
+          @click.prevent.stop="$emit('open', device)"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />

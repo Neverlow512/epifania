@@ -7,6 +7,7 @@ from core.installer import Installer
 from core.logger import get_logger
 from core.log_streamer import log_streamer
 import asyncio
+from datetime import datetime
 
 logger = get_logger(__name__, "backend")
 
@@ -90,6 +91,8 @@ async def get_device_details(device_id: str):
 async def connect_device(device_id: str):
     try:
         logger.info(f"Connection verification requested for {device_id}")
+        # Log the intent for visibility in ADB Operations
+        log_streamer.add_log(device_id, "adb_operations", "verify: echo 'test'", "debug")
         result = device_manager.verify_device_connection(device_id)
         return result
     except Exception as e:
@@ -235,16 +238,13 @@ async def websocket_logs(websocket: WebSocket, device_id: str):
     logger.info(f"WebSocket connection established for device {device_id}")
     
     active_streams: Dict[str, bool] = {}
+    loop = asyncio.get_event_loop()
     
-    async def send_log(dev_id: str, log_type: str, message: str, level: str):
+    async def send_payload(payload: Dict):
         try:
-            if dev_id == device_id and active_streams.get(log_type, False):
-                await websocket.send_json({
-                    "type": log_type,
-                    "level": level,
-                    "message": message,
-                    "timestamp": asyncio.get_event_loop().time()
-                })
+            log_type = payload.get("type")
+            if active_streams.get(log_type, False):
+                await websocket.send_json(payload)
         except Exception as e:
             logger.error(f"Error sending log via WebSocket: {str(e)}")
     
@@ -257,8 +257,13 @@ async def websocket_logs(websocket: WebSocket, device_id: str):
             if action == "start" and log_type:
                 logger.info(f"Starting {log_type} stream for device {device_id}")
                 active_streams[log_type] = True
+                # Register real-time updates for the requested log type
+                log_streamer.register_subscriber(device_id, log_type, loop, send_payload)
                 
                 # Send historical logs first
+                if log_type == "logcat":
+                    # Populate history buffer from device
+                    log_streamer.fetch_logcat_history(device_id, device_manager.adb_manager, max_lines=500)
                 historical_logs = log_streamer.get_logs(device_id, log_type)
                 for log_entry in historical_logs:
                     await websocket.send_json({
@@ -273,13 +278,14 @@ async def websocket_logs(websocket: WebSocket, device_id: str):
                     asyncio.create_task(log_streamer.stream_logcat(
                         device_id, 
                         device_manager.adb_manager,
-                        send_log
+                        loop
                     ))
                 
             elif action == "stop" and log_type:
                 logger.info(f"Stopping {log_type} stream for device {device_id}")
                 active_streams[log_type] = False
                 log_streamer.stop_stream(device_id, log_type)
+                log_streamer.unregister_subscriber(device_id, log_type, send_payload)
                 
             elif action == "clear" and log_type:
                 logger.info(f"Clearing {log_type} logs for device {device_id}")
@@ -289,8 +295,10 @@ async def websocket_logs(websocket: WebSocket, device_id: str):
         logger.info(f"WebSocket disconnected for device {device_id}")
         for log_type in active_streams:
             log_streamer.stop_stream(device_id, log_type)
+            log_streamer.unregister_subscriber(device_id, log_type, send_payload)
     except Exception as e:
         logger.error(f"WebSocket error: {str(e)}")
         for log_type in active_streams:
             log_streamer.stop_stream(device_id, log_type)
+            log_streamer.unregister_subscriber(device_id, log_type, send_payload)
 

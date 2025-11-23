@@ -9,8 +9,9 @@
             <p class="text-slate-400 text-sm">Manage connected Android devices and emulators</p>
           </div>
           <button 
+            type="button"
             class="btn btn-primary border-0 gap-2 transition active:scale-95 disabled:opacity-60 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7100d0]"
-            @click="scanDevices"
+            @click.prevent.stop="scanDevices"
             :disabled="loading"
           >
             <svg v-if="!loading" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -53,8 +54,9 @@
           Connect an Android device via USB or start an emulator, then scan again.
         </p>
         <button 
+          type="button"
           class="btn btn-primary border-0 mt-6 transition active:scale-95"
-          @click="scanDevices"
+          @click.prevent.stop="scanDevices"
         >
           Scan Again
         </button>

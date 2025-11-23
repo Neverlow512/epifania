@@ -119,12 +119,15 @@ class Installer:
             if not device:
                 return False
             
-            # Try multiple process listing methods for compatibility
-            result = device.shell("ps -A | grep frida-server")
-            if not result or "grep" in result:
-                result = device.shell("ps | grep frida-server")
-            
-            running = result and "frida-server" in result and "grep" not in result
+            # Prefer pidof when available
+            result = device.shell("pidof frida-server")
+            running = bool(result and result.strip())
+            if not running:
+                # Fallback to ps variants
+                result = device.shell("ps -A | grep frida-server | grep -v grep")
+                if not result:
+                    result = device.shell("ps | grep frida-server | grep -v grep")
+                running = bool(result and "frida-server" in result)
             
             if running:
                 logger.info(f"Frida server is running on {device_serial}")
@@ -284,19 +287,19 @@ class Installer:
             
             # Try to start with root privileges first, fallback to non-root
             try:
-                result = device.shell("su -c 'nohup /data/local/tmp/frida-server > /dev/null 2>&1 &'")
-                logger.debug(f"Started Frida server with root: {result}")
+                result = device.shell("su -c 'sh -c \"/data/local/tmp/frida-server >/dev/null 2>&1 &\"'")
+                logger.debug(f"Attempted to start Frida server with root: {result}")
                 if LOG_STREAMER_AVAILABLE:
-                    log_streamer.add_log(device_serial, "frida_server", "Started with root privileges", "info")
-                    log_streamer.add_log(device_serial, "adb_operations", "shell: su -c 'nohup /data/local/tmp/frida-server > /dev/null 2>&1 &'", "info")
+                    log_streamer.add_log(device_serial, "frida_server", "Tried start with root privileges", "info")
+                    log_streamer.add_log(device_serial, "adb_operations", "shell: su -c '/data/local/tmp/frida-server >/dev/null 2>&1 &'", "info")
             except:
                 logger.debug("Root start failed, trying without root")
                 if LOG_STREAMER_AVAILABLE:
                     log_streamer.add_log(device_serial, "frida_server", "Root start failed, trying without root", "warning")
-                result = device.shell("nohup /data/local/tmp/frida-server > /dev/null 2>&1 &")
-                logger.debug(f"Started Frida server without root: {result}")
+                result = device.shell("sh -c \"/data/local/tmp/frida-server >/dev/null 2>&1 &\"")
+                logger.debug(f"Attempted to start Frida server without root: {result}")
                 if LOG_STREAMER_AVAILABLE:
-                    log_streamer.add_log(device_serial, "adb_operations", "shell: nohup /data/local/tmp/frida-server > /dev/null 2>&1 &", "info")
+                    log_streamer.add_log(device_serial, "adb_operations", "shell: /data/local/tmp/frida-server >/dev/null 2>&1 &", "info")
             
             import time
             time.sleep(2)
@@ -338,13 +341,22 @@ class Installer:
             
             # Try with root first, then fallback
             try:
-                device.shell("su -c 'killall frida-server'")
+                # Prefer pidof when available
+                pids = device.shell("pidof frida-server")
+                if pids and pids.strip():
+                    device.shell(f"su -c 'kill -9 {pids.strip()}'")
+                else:
+                    device.shell("su -c 'killall frida-server'")
                 if LOG_STREAMER_AVAILABLE:
-                    log_streamer.add_log(device_serial, "adb_operations", "shell: su -c 'killall frida-server'", "info")
+                    log_streamer.add_log(device_serial, "adb_operations", "shell: su -c 'kill -9 $(pidof frida-server)' or killall", "info")
             except:
-                device.shell("killall frida-server")
+                pids = device.shell("pidof frida-server")
+                if pids and pids.strip():
+                    device.shell(f"kill -9 {pids.strip()}")
+                else:
+                    device.shell("killall frida-server")
                 if LOG_STREAMER_AVAILABLE:
-                    log_streamer.add_log(device_serial, "adb_operations", "shell: killall frida-server", "info")
+                    log_streamer.add_log(device_serial, "adb_operations", "shell: kill -9 $(pidof frida-server) or killall", "info")
             
             import time
             time.sleep(1)
