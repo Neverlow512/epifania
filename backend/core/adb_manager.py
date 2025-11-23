@@ -180,4 +180,72 @@ class ADBManager:
         except Exception as e:
             logger.warning(f"ADB server not available: {str(e)}")
             return False
+    
+    def restart_adb_server(self) -> Dict[str, any]:
+        try:
+            logger.info("Restarting ADB server")
+            
+            # Kill the ADB server
+            import subprocess
+            kill_result = subprocess.run(
+                ["adb", "kill-server"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if kill_result.returncode != 0:
+                logger.warning(f"ADB kill-server returned non-zero: {kill_result.stderr}")
+            
+            logger.info("ADB server killed, waiting before restart")
+            import time
+            time.sleep(1)
+            
+            # Start the ADB server
+            start_result = subprocess.run(
+                ["adb", "start-server"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if start_result.returncode != 0:
+                logger.error(f"Failed to start ADB server: {start_result.stderr}")
+                return {
+                    "success": False,
+                    "message": f"Failed to start ADB server: {start_result.stderr}"
+                }
+            
+            logger.info("ADB server started, reconnecting client")
+            time.sleep(1)
+            
+            # Reconnect the client
+            self._connect()
+            
+            # Verify connection
+            if self.is_adb_available():
+                logger.info("ADB server restarted successfully")
+                return {
+                    "success": True,
+                    "message": "ADB server restarted successfully"
+                }
+            else:
+                logger.error("ADB server started but connection verification failed")
+                return {
+                    "success": False,
+                    "message": "ADB server started but connection verification failed"
+                }
+                
+        except subprocess.TimeoutExpired:
+            logger.error("ADB restart timed out")
+            return {
+                "success": False,
+                "message": "ADB restart operation timed out"
+            }
+        except Exception as e:
+            logger.error(f"Failed to restart ADB server: {str(e)}")
+            return {
+                "success": False,
+                "message": f"Failed to restart ADB server: {str(e)}"
+            }
 

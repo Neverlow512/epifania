@@ -763,19 +763,24 @@ export default {
     const installFrida = async () => {
       if (!props.selectedFridaVersion) {
         showStatus('Please select a Frida version from the top menu', 'error')
+        toast.error('Please select a Frida version from the top menu', 'Installation Failed')
         return
       }
 
       try {
         installing.value = true
+        toast.info(`Installing Frida ${props.selectedFridaVersion}...`, 'Frida Installation')
         const response = await axios.post(
           `http://localhost:8000/api/devices/${deviceId.value}/frida/install`,
           { version: props.selectedFridaVersion }
         )
         showStatus(response.data.message, 'success')
+        toast.success(response.data.message, 'Frida Installation')
         await loadDeviceDetails(false)
       } catch (err) {
-        showStatus(err.response?.data?.detail || 'Failed to install Frida server', 'error')
+        const errorMsg = err.response?.data?.detail || 'Failed to install Frida server'
+        showStatus(errorMsg, 'error')
+        toast.error(errorMsg, 'Installation Failed')
       } finally {
         installing.value = false
       }
@@ -813,11 +818,15 @@ export default {
     const startFrida = async () => {
       try {
         starting.value = true
+        toast.info('Starting Frida server...', 'Frida Server')
         const response = await axios.post(`http://localhost:8000/api/devices/${deviceId.value}/frida/start`)
         showStatus(response.data.message, 'success')
+        toast.success(response.data.message, 'Frida Server')
         await loadDeviceDetails(false)
       } catch (err) {
-        showStatus(err.response?.data?.detail || 'Failed to start Frida server', 'error')
+        const errorMsg = err.response?.data?.detail || 'Failed to start Frida server'
+        showStatus(errorMsg, 'error')
+        toast.error(errorMsg, 'Start Failed')
       } finally {
         starting.value = false
       }
@@ -826,11 +835,15 @@ export default {
     const stopFrida = async () => {
       try {
         stopping.value = true
+        toast.info('Stopping Frida server...', 'Frida Server')
         const response = await axios.post(`http://localhost:8000/api/devices/${deviceId.value}/frida/stop`)
         showStatus(response.data.message, 'success')
+        toast.success(response.data.message, 'Frida Server')
         await loadDeviceDetails(false)
       } catch (err) {
-        showStatus(err.response?.data?.detail || 'Failed to stop Frida server', 'error')
+        const errorMsg = err.response?.data?.detail || 'Failed to stop Frida server'
+        showStatus(errorMsg, 'error')
+        toast.error(errorMsg, 'Stop Failed')
       } finally {
         stopping.value = false
       }

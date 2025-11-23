@@ -7,11 +7,16 @@ from core.installer import Installer
 from core.diagnostics import DeviceDiagnostics
 from core.logger import get_logger
 from core.log_streamer import log_streamer
+from monitoring import health_manager, process_manager
 import asyncio
 from datetime import datetime
 import frida
 
 logger = get_logger(__name__, "backend")
+
+# Cleanup stale processes before starting
+logger.info("Performing pre-startup cleanup...")
+process_manager.cleanup_stale_processes()
 
 app = FastAPI(title="Epifania API", version="1.0.0")
 
@@ -32,6 +37,36 @@ class FridaCleanRequest(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     logger.info("Epifania backend starting up")
+    
+    # Write PID file for process tracking
+    process_manager.write_pid_file()
+    
+    # Register health checks
+    def check_adb_connection():
+        try:
+            return device_manager.adb_manager.is_adb_available()
+        except Exception as e:
+            logger.error(f"ADB health check failed: {str(e)}")
+            return False
+    
+    health_manager.register_health_check(check_adb_connection, "adb_connection")
+    
+    # Start health monitoring
+    await health_manager.start()
+    logger.info("Health monitoring started")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Epifania backend shutting down")
+    
+    # Stop health monitoring
+    await health_manager.stop()
+    logger.info("Health monitoring stopped")
+    
+    # Cleanup process manager
+    process_manager.cleanup_on_shutdown()
+    logger.info("Process cleanup complete")
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,10 +88,54 @@ diagnostics = DeviceDiagnostics(adb_manager=device_manager.adb_manager)
 async def health_check():
     logger.debug("Health check requested")
     adb_available = device_manager.adb_manager.is_adb_available()
+    
+    # Get device count for additional status info
+    device_count = 0
+    if adb_available:
+        try:
+            devices = device_manager.adb_manager.list_devices()
+            device_count = len(devices)
+        except:
+            pass
+    
+    # Get health manager status
+    health_status = health_manager.get_status()
+    
     return {
-        "status": "healthy",
-        "adb_connected": adb_available
+        "status": "healthy" if health_status["is_healthy"] else "degraded",
+        "adb_connected": adb_available,
+        "device_count": device_count,
+        "timestamp": datetime.now().isoformat(),
+        "health_manager": health_status
     }
+
+
+@app.get("/api/system/health")
+async def get_system_health():
+    try:
+        logger.info("System health check requested")
+        health_results = await health_manager.run_health_checks()
+        return health_results
+    except Exception as e:
+        logger.error(f"Failed to get system health: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/adb/restart")
+async def restart_adb():
+    try:
+        logger.info("ADB restart requested")
+        result = device_manager.adb_manager.restart_adb_server()
+        
+        if result["success"]:
+            return result
+        else:
+            raise HTTPException(status_code=500, detail=result["message"])
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to restart ADB: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/devices")

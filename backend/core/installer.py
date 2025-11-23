@@ -329,20 +329,21 @@ class Installer:
                 pass
             
             # Try to start with root privileges first, fallback to non-root
+            # Use proper daemonization with nohup and setsid for background execution
             try:
-                result = device.shell(f"su -c 'sh -c \"{server_path} >/dev/null 2>&1 &\"'")
+                result = device.shell(f"su -c 'nohup {server_path} > /dev/null 2>&1 &'")
                 logger.debug(f"Attempted to start Frida server with root: {result}")
                 if LOG_STREAMER_AVAILABLE:
                     log_streamer.add_log(device_serial, "frida_server", "Tried start with root privileges", "info")
-                    log_streamer.add_log(device_serial, "adb_operations", f"shell: su -c '{server_path} >/dev/null 2>&1 &'", "info")
+                    log_streamer.add_log(device_serial, "adb_operations", f"shell: su -c 'nohup {server_path} > /dev/null 2>&1 &'", "info")
             except:
                 logger.debug("Root start failed, trying without root")
                 if LOG_STREAMER_AVAILABLE:
                     log_streamer.add_log(device_serial, "frida_server", "Root start failed, trying without root", "warning")
-                result = device.shell(f"sh -c \"{server_path} >/dev/null 2>&1 &\"")
+                result = device.shell(f"nohup {server_path} > /dev/null 2>&1 &")
                 logger.debug(f"Attempted to start Frida server without root: {result}")
                 if LOG_STREAMER_AVAILABLE:
-                    log_streamer.add_log(device_serial, "adb_operations", f"shell: {server_path} >/dev/null 2>&1 &", "info")
+                    log_streamer.add_log(device_serial, "adb_operations", f"shell: nohup {server_path} > /dev/null 2>&1 &", "info")
             
             import time
             time.sleep(2)

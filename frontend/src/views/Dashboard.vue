@@ -85,6 +85,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import DeviceCard from '../components/DeviceCard.vue'
+import { useToast } from '../composables/useToast'
 
 export default {
   name: 'Dashboard',
@@ -98,10 +99,12 @@ export default {
     const error = ref(null)
     const scanned = ref(false)
     let autoRefreshInterval = null
+    const { success, error: errorToast, info } = useToast()
 
     const scanDevices = async (isAutoRefresh = false) => {
       if (!isAutoRefresh) {
         loading.value = true
+        info('Scanning for devices...', 'Device Scan')
       }
       error.value = null
       
@@ -124,10 +127,19 @@ export default {
         
         devices.value = Array.from(deviceMap.values())
         scanned.value = true
+        
+        if (!isAutoRefresh) {
+          if (newDevices.length > 0) {
+            success(`Found ${newDevices.length} device${newDevices.length > 1 ? 's' : ''}`, 'Device Scan')
+          } else {
+            info('No devices found', 'Device Scan')
+          }
+        }
       } catch (err) {
         error.value = err.response?.data?.detail || 'Failed to connect to backend'
         if (!isAutoRefresh) {
           devices.value = []
+          errorToast(error.value, 'Device Scan Failed')
         }
       } finally {
         if (!isAutoRefresh) {

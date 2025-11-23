@@ -40,7 +40,17 @@ BACKEND_PID=$!
 deactivate
 cd "$PROJECT_ROOT"
 
-sleep 2
+echo "[Backend] Waiting for backend to be ready..."
+for i in {1..30}; do
+    if curl --max-time 2 -s http://127.0.0.1:8000/health > /dev/null 2>&1; then
+        echo "[Backend] Backend is ready"
+        break
+    fi
+    sleep 1
+    if [ $i -eq 30 ]; then
+        echo "[Backend] Warning: Backend may not be ready yet"
+    fi
+done
 
 echo "[Frontend] Starting Vite dev server on http://127.0.0.1:5173"
 cd "$FRONTEND_DIR"
@@ -66,6 +76,7 @@ echo "  Errors:   tail -f logs/backend/error.log"
 echo "  Uvicorn:  tail -f logs/server/uvicorn.log"
 echo "  Vite:     tail -f logs/server/vite.log"
 echo ""
+echo "Note: Backend has integrated health monitoring"
 echo "Press Ctrl+C to stop all services"
 echo ""
 

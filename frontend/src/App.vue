@@ -61,11 +61,26 @@
           </div>
         </div>
         
-        <!-- ADB Status -->
+        <!-- ADB Status and Reconnect -->
         <div class="flex items-center gap-2">
           <div class="badge badge-sm" :class="adbConnected ? 'badge-success' : 'badge-error'">
             {{ adbConnected ? 'ADB Connected' : 'ADB Offline' }}
           </div>
+          <button 
+            v-if="!adbConnected"
+            @click="restartAdb"
+            :disabled="isRestartingAdb"
+            class="btn btn-xs btn-ghost text-slate-400 hover:text-white gap-1"
+            title="Restart ADB Server"
+          >
+            <svg v-if="!isRestartingAdb" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {{ isRestartingAdb ? 'Restarting...' : 'Reconnect' }}
+          </button>
         </div>
       </div>
     </div>
@@ -83,9 +98,11 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import axios from 'axios'
 import ToastNotification from './components/ToastNotification.vue'
+import { useToast } from './composables/useToast'
+import { useApiConnection } from './composables/useApiConnection'
 
 export default {
   name: 'App',
@@ -96,15 +113,28 @@ export default {
     const adbConnected = ref(false)
     const fridaVersions = ref([])
     const selectedFridaVersion = ref('')
+    const isRestartingAdb = ref(false)
+    const { success, error, info, warning } = useToast()
+    const { isBackendConnected, startAutoReconnect, checkConnection } = useApiConnection()
 
     const checkHealth = async () => {
       try {
-        const response = await axios.get('http://localhost:8000/health')
+        const response = await axios.get('http://localhost:8000/health', { timeout: 3000 })
         adbConnected.value = response.data.adb_connected
       } catch (err) {
         adbConnected.value = false
       }
     }
+
+    // Watch backend connection status and show notifications
+    watch(isBackendConnected, (connected, wasConnected) => {
+      if (connected && wasConnected === false) {
+        success('Backend connection restored', 'System Status')
+        checkHealth()
+      } else if (!connected && wasConnected === true) {
+        warning('Backend connection lost, attempting to reconnect...', 'System Status')
+      }
+    })
 
     const loadFridaVersions = async () => {
       if (fridaVersions.value.length > 0) return
@@ -121,18 +151,56 @@ export default {
       }
     }
 
-    onMounted(() => {
-      checkHealth()
-      loadFridaVersions()
+    const restartAdb = async () => {
+      if (isRestartingAdb.value) return
       
-      setInterval(checkHealth, 10000)
+      isRestartingAdb.value = true
+      info('Restarting ADB server...', 'ADB Restart')
+      
+      try {
+        const response = await axios.post('http://localhost:8000/api/adb/restart')
+        
+        if (response.data.success) {
+          success('ADB server restarted successfully', 'ADB Restart')
+          await checkHealth()
+        } else {
+          error(response.data.message || 'Failed to restart ADB server', 'ADB Restart')
+        }
+      } catch (err) {
+        error(err.response?.data?.detail || 'Failed to restart ADB server', 'ADB Restart')
+      } finally {
+        isRestartingAdb.value = false
+      }
+    }
+
+    onMounted(() => {
+      // Start auto-reconnect system
+      startAutoReconnect()
+      
+      // Initial checks
+      checkConnection().then(connected => {
+        if (connected) {
+          checkHealth()
+          loadFridaVersions()
+        }
+      })
+      
+      // Periodic health checks when connected
+      setInterval(() => {
+        if (isBackendConnected.value) {
+          checkHealth()
+        }
+      }, 10000)
     })
 
     return {
       adbConnected,
       fridaVersions,
       selectedFridaVersion,
-      loadFridaVersions
+      isRestartingAdb,
+      isBackendConnected,
+      loadFridaVersions,
+      restartAdb
     }
   }
 }
