@@ -4,6 +4,9 @@ from pydantic import BaseModel
 from typing import Optional, Dict, List
 from core.device_manager import DeviceManager
 from core.installer import Installer
+from frida_mgmt.manage.server import FridaServerManager
+from frida_mgmt.manage.discovery import FridaDiscovery
+from frida_mgmt.manage.permissions import FridaPermissions
 from core.diagnostics import DeviceDiagnostics
 from core.logger import get_logger
 from core.log_streamer import log_streamer
@@ -81,6 +84,9 @@ app.add_middleware(
 
 device_manager = DeviceManager()
 installer = Installer(adb_manager=device_manager.adb_manager)
+server_manager = FridaServerManager(adb_manager=device_manager.adb_manager)
+discovery_manager = FridaDiscovery(adb_manager=device_manager.adb_manager)
+permissions_manager = FridaPermissions(adb_manager=device_manager.adb_manager)
 diagnostics = DeviceDiagnostics(adb_manager=device_manager.adb_manager)
 
 
@@ -159,8 +165,8 @@ async def get_device_details(device_id: str):
         if not device:
             raise HTTPException(status_code=404, detail="Device not found")
         
-        frida_version = installer.check_frida_server_version(device_id)
-        frida_running = installer.is_frida_server_running(device_id)
+        frida_version = server_manager.check_frida_server_version(device_id)
+        frida_running = server_manager.is_frida_server_running(device_id)
         
         device["frida_server_version"] = frida_version
         device["frida_server_running"] = frida_running
@@ -246,7 +252,13 @@ async def install_frida(device_id: str, request: FridaInstallRequest):
         success = installer.install_frida_server(device_id, request.version, frida_arch)
         
         if success:
-            start_success = installer.start_frida_server(device_id)
+            # Pass the necessary functions to start_frida_server
+            start_success = server_manager.start_frida_server(
+                device_id,
+                check_permissions_func=permissions_manager.check_permissions,
+                set_permissions_func=permissions_manager.set_permissions,
+                discover_servers_func=discovery_manager.discover_frida_servers
+            )
             return {
                 "success": True,
                 "message": "Frida server installed successfully",
@@ -283,7 +295,12 @@ async def push_frida(device_id: str, request: FridaPushRequest):
 async def start_frida(device_id: str):
     try:
         logger.info(f"Frida start requested for {device_id}")
-        success = installer.start_frida_server(device_id)
+        success = server_manager.start_frida_server(
+            device_id,
+            check_permissions_func=permissions_manager.check_permissions,
+            set_permissions_func=permissions_manager.set_permissions,
+            discover_servers_func=discovery_manager.discover_frida_servers
+        )
         
         if success:
             return {"success": True, "message": "Frida server started successfully"}
@@ -300,7 +317,7 @@ async def start_frida(device_id: str):
 async def stop_frida(device_id: str):
     try:
         logger.info(f"Frida stop requested for {device_id}")
-        success = installer.stop_frida_server(device_id)
+        success = server_manager.stop_frida_server(device_id)
         
         if success:
             return {"success": True, "message": "Frida server stopped successfully"}
@@ -317,7 +334,12 @@ async def stop_frida(device_id: str):
 async def restart_frida(device_id: str):
     try:
         logger.info(f"Frida restart requested for {device_id}")
-        success = installer.restart_frida_server(device_id)
+        success = server_manager.restart_frida_server(
+            device_id,
+            check_permissions_func=permissions_manager.check_permissions,
+            set_permissions_func=permissions_manager.set_permissions,
+            discover_servers_func=discovery_manager.discover_frida_servers
+        )
         
         if success:
             return {"success": True, "message": "Frida server restarted successfully"}
@@ -345,7 +367,7 @@ async def get_device_logs(device_id: str, log_type: str):
 async def discover_frida_servers(device_id: str):
     try:
         logger.info(f"Frida server discovery requested for {device_id}")
-        servers = installer.discover_frida_servers(device_id)
+        servers = discovery_manager.discover_frida_servers(device_id)
         return {"servers": servers}
     except Exception as e:
         logger.error(f"Failed to discover Frida servers: {str(e)}")
@@ -356,7 +378,12 @@ async def discover_frida_servers(device_id: str):
 async def clean_frida_servers(device_id: str, request: FridaCleanRequest):
     try:
         logger.info(f"Frida server cleanup requested for {device_id}")
-        result = installer.remove_frida_servers(device_id, request.paths)
+        result = discovery_manager.remove_frida_servers(
+            device_id,
+            request.paths,
+            is_running_func=server_manager.is_frida_server_running,
+            stop_server_func=server_manager.stop_frida_server
+        )
         
         if result["success"]:
             return result
@@ -373,7 +400,7 @@ async def clean_frida_servers(device_id: str, request: FridaCleanRequest):
 async def get_frida_permissions(device_id: str, path: str = "/data/local/tmp/frida-server"):
     try:
         logger.info(f"Frida permissions check requested for {device_id}")
-        result = installer.check_permissions(device_id, path)
+        result = permissions_manager.check_permissions(device_id, path)
         return result
     except Exception as e:
         logger.error(f"Failed to check Frida permissions: {str(e)}")
@@ -386,7 +413,7 @@ async def set_frida_permissions(device_id: str, path: Optional[str] = None):
         if path is None:
             path = "/data/local/tmp/frida-server"
         logger.info(f"Frida permissions update requested for {device_id} at {path}")
-        result = installer.set_permissions(device_id, path)
+        result = permissions_manager.set_permissions(device_id, path)
         
         if result["success"]:
             return result
@@ -422,7 +449,7 @@ async def test_frida_connection(device_id: str):
         }
         
         # Check if server is running first
-        if not installer.is_frida_server_running(device_id):
+        if not server_manager.is_frida_server_running(device_id):
             result["message"] = "Frida server is not running"
             result["details"]["error"] = "No frida-server process found"
             return result
