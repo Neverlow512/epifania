@@ -1,13 +1,15 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from core.device_manager import DeviceManager
 from core.installer import Installer
+from core.diagnostics import DeviceDiagnostics
 from core.logger import get_logger
 from core.log_streamer import log_streamer
 import asyncio
 from datetime import datetime
+import frida
 
 logger = get_logger(__name__, "backend")
 
@@ -22,6 +24,10 @@ class FridaInstallRequest(BaseModel):
 class FridaPushRequest(BaseModel):
     version: str
     architecture: str
+
+
+class FridaCleanRequest(BaseModel):
+    paths: List[str]
 
 @app.on_event("startup")
 async def startup_event():
@@ -40,6 +46,7 @@ app.add_middleware(
 
 device_manager = DeviceManager()
 installer = Installer(adb_manager=device_manager.adb_manager)
+diagnostics = DeviceDiagnostics(adb_manager=device_manager.adb_manager)
 
 
 @app.get("/health")
@@ -229,6 +236,123 @@ async def get_device_logs(device_id: str, log_type: str):
         return {"logs": logs}
     except Exception as e:
         logger.error(f"Failed to get logs: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/devices/{device_id}/frida/discover")
+async def discover_frida_servers(device_id: str):
+    try:
+        logger.info(f"Frida server discovery requested for {device_id}")
+        servers = installer.discover_frida_servers(device_id)
+        return {"servers": servers}
+    except Exception as e:
+        logger.error(f"Failed to discover Frida servers: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/devices/{device_id}/frida/clean")
+async def clean_frida_servers(device_id: str, request: FridaCleanRequest):
+    try:
+        logger.info(f"Frida server cleanup requested for {device_id}")
+        result = installer.remove_frida_servers(device_id, request.paths)
+        
+        if result["success"]:
+            return result
+        else:
+            raise HTTPException(status_code=500, detail=result["message"])
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to clean Frida servers: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/devices/{device_id}/frida/permissions")
+async def get_frida_permissions(device_id: str, path: str = "/data/local/tmp/frida-server"):
+    try:
+        logger.info(f"Frida permissions check requested for {device_id}")
+        result = installer.check_permissions(device_id, path)
+        return result
+    except Exception as e:
+        logger.error(f"Failed to check Frida permissions: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/devices/{device_id}/frida/permissions")
+async def set_frida_permissions(device_id: str, path: Optional[str] = None):
+    try:
+        if path is None:
+            path = "/data/local/tmp/frida-server"
+        logger.info(f"Frida permissions update requested for {device_id} at {path}")
+        result = installer.set_permissions(device_id, path)
+        
+        if result["success"]:
+            return result
+        else:
+            raise HTTPException(status_code=500, detail=result["message"])
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to set Frida permissions: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/devices/{device_id}/diagnostics/adb")
+async def run_adb_diagnostics(device_id: str):
+    try:
+        logger.info(f"ADB diagnostics requested for {device_id}")
+        results = diagnostics.run_full_diagnostics(device_id)
+        return results
+    except Exception as e:
+        logger.error(f"Failed to run ADB diagnostics: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/devices/{device_id}/frida/test-connection")
+async def test_frida_connection(device_id: str):
+    try:
+        logger.info(f"Frida connection test requested for {device_id}")
+        
+        result = {
+            "connected": False,
+            "message": "",
+            "details": {}
+        }
+        
+        # Check if server is running first
+        if not installer.is_frida_server_running(device_id):
+            result["message"] = "Frida server is not running"
+            result["details"]["error"] = "No frida-server process found"
+            return result
+        
+        # Try to connect via Frida
+        try:
+            device = frida.get_device(device_id)
+            result["details"]["device_name"] = device.name
+            result["details"]["device_type"] = device.type
+            
+            # Try to enumerate processes to verify connection works
+            processes = device.enumerate_processes()
+            result["details"]["process_count"] = len(processes)
+            
+            result["connected"] = True
+            result["message"] = "Frida connection successful"
+            logger.info(f"Frida connection test passed for {device_id}")
+            
+        except frida.ServerNotRunningError:
+            result["message"] = "Frida server not responding"
+            result["details"]["error"] = "Server process exists but not responding"
+        except frida.TimedOutError:
+            result["message"] = "Frida connection timed out"
+            result["details"]["error"] = "Connection attempt timed out"
+        except Exception as frida_error:
+            result["message"] = f"Frida connection failed: {str(frida_error)}"
+            result["details"]["error"] = str(frida_error)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Failed to test Frida connection: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -76,15 +76,22 @@
         <component :is="Component" :selected-frida-version="selectedFridaVersion" />
       </transition>
     </router-view>
+
+    <!-- Toast Notifications -->
+    <ToastNotification />
   </div>
 </template>
 
 <script>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import ToastNotification from './components/ToastNotification.vue'
 
 export default {
   name: 'App',
+  components: {
+    ToastNotification
+  },
   setup() {
     const adbConnected = ref(false)
     const fridaVersions = ref([])

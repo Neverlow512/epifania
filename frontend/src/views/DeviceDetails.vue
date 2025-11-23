@@ -121,13 +121,25 @@
                 </span>
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-slate-400">Server Status</span>
+                <span class="text-slate-400">Server Process</span>
                 <div class="flex items-center gap-2">
                   <div class="w-2 h-2 rounded-full" :class="device.frida_server_running ? 'bg-green-500 status-indicator' : 'bg-gray-500'"></div>
                   <span :class="device.frida_server_running ? 'text-green-400' : 'text-gray-400'">
                     {{ device.frida_server_running ? 'Running' : 'Stopped' }}
                   </span>
                 </div>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Frida Connection</span>
+                <div class="flex items-center gap-2">
+                  <div class="w-2 h-2 rounded-full" :class="fridaConnected ? 'bg-green-500 status-indicator' : testingConnection ? 'bg-yellow-500 animate-pulse' : 'bg-gray-500'"></div>
+                  <span :class="fridaConnected ? 'text-green-400' : testingConnection ? 'text-yellow-400' : 'text-gray-400'">
+                    {{ fridaConnected ? 'Connected' : testingConnection ? 'Testing...' : 'Not Connected' }}
+                  </span>
+                </div>
+              </div>
+              <div v-if="lastConnectionTest" class="text-xs text-slate-500">
+                Last checked: {{ lastConnectionTest }}
               </div>
             </div>
             <button 
@@ -154,12 +166,68 @@
           <!-- Install Section -->
           <div class="mb-6">
             <h4 class="text-lg font-semibold text-white mb-3">Install Frida Server</h4>
-            <p class="text-sm text-slate-400 mb-4">
-              Install the selected Frida version from the top menu. The server will be downloaded, pushed to the device, and started automatically.
-            </p>
+            <div class="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4 mb-4">
+              <div class="flex items-start gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div class="text-sm text-blue-200">
+                  <p class="font-medium mb-1">Automatic Configuration</p>
+                  <p class="text-blue-300/90">
+                    The system will automatically select the appropriate Frida server binary based on your device's architecture and platform. The server will be downloaded, deployed to the device, and started with optimal settings.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="device" class="space-y-3 mb-4">
+              <div class="bg-black/30 rounded-lg p-4 border border-primary/20">
+                <div class="text-xs text-slate-400 uppercase tracking-wider mb-3">Download Configuration</div>
+                
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between text-sm">
+                    <span class="text-slate-400">Frida Version:</span>
+                    <code class="text-primary font-mono font-semibold">{{ selectedFridaVersion || 'Not selected' }}</code>
+                  </div>
+                  
+                  <div class="flex items-center justify-between text-sm">
+                    <span class="text-slate-400">Platform:</span>
+                    <code class="text-white font-mono">Android</code>
+                  </div>
+                  
+                  <div class="flex items-center justify-between text-sm">
+                    <span class="text-slate-400">Device Architecture:</span>
+                    <code class="text-white font-mono">{{ device.architecture }}</code>
+                  </div>
+                  
+                  <div class="flex items-center justify-between text-sm">
+                    <span class="text-slate-400">Frida Architecture:</span>
+                    <code class="text-green-400 font-mono font-semibold">{{ getMappedArchitecture(device.architecture) }}</code>
+                  </div>
+                  
+                  <div class="divider my-2"></div>
+                  
+                  <div class="flex items-start justify-between text-sm">
+                    <span class="text-slate-400">Download URL:</span>
+                    <code class="text-blue-400 font-mono text-right ml-2 break-all text-xs">{{ getFridaDownloadUrl() }}</code>
+                  </div>
+                  
+                  <div class="flex items-start justify-between text-sm">
+                    <span class="text-slate-400">Cache Path:</span>
+                    <code class="text-slate-300 font-mono text-right ml-2 break-all text-xs">{{ getFridaBinaryPath() }}</code>
+                  </div>
+                  
+                  <div class="flex items-start justify-between text-sm">
+                    <span class="text-slate-400">Device Path:</span>
+                    <code class="text-yellow-400 font-mono text-right ml-2 break-all">/data/local/tmp/frida-server</code>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <button 
               type="button"
-              class="btn btn-primary gap-2"
+              class="btn btn-primary gap-2 w-full"
               @click.prevent.stop="installFrida"
               :disabled="installing || !selectedFridaVersion"
             >
@@ -254,15 +322,287 @@
         </div>
       </div>
 
-      <!-- Status Messages -->
-      <div v-if="statusMessage" class="alert shadow-lg mb-6" :class="statusType === 'success' ? 'alert-success' : 'alert-error'">
-        <svg v-if="statusType === 'success'" xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <svg v-else xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <span>{{ statusMessage }}</span>
+      <!-- Frida Server Discovery & Cleanup -->
+      <div class="card bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20 mb-6">
+        <div class="card-body">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="card-title text-white">Frida Server Discovery</h3>
+            <button 
+              type="button"
+              class="btn btn-sm btn-outline btn-primary"
+              @click.prevent.stop="discoverServers"
+              :disabled="discovering"
+            >
+              <svg v-if="!discovering" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span v-if="discovering" class="loading loading-spinner loading-xs"></span>
+              {{ discovering ? 'Scanning...' : 'Scan Device' }}
+            </button>
+          </div>
+
+          <div v-if="discoveredServers.length === 0 && !discovering" class="text-center py-8 text-slate-400">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p>No Frida servers discovered yet</p>
+            <p class="text-sm mt-1">Click "Scan Device" to search for servers</p>
+          </div>
+
+          <div v-else-if="discoveredServers.length > 0" class="space-y-3">
+            <div 
+              v-for="server in discoveredServers" 
+              :key="server.path"
+              class="flex items-center gap-3 p-3 bg-black/30 rounded-lg border"
+              :class="server.path === '/data/local/tmp/frida-server' ? 'border-primary/50' : 'border-neutral-700'"
+            >
+              <input 
+                type="checkbox" 
+                v-model="server.selected"
+                class="checkbox checkbox-sm checkbox-primary"
+              />
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <code class="text-sm text-white font-mono break-all">{{ server.path }}</code>
+                  <span v-if="server.path === '/data/local/tmp/frida-server'" class="badge badge-xs badge-primary">Standard</span>
+                  <span v-if="server.is_executable" class="badge badge-xs badge-success">✓ Executable</span>
+                  <span v-else class="badge badge-xs badge-error">✗ Not Executable</span>
+                </div>
+                <div class="flex items-center gap-3 mt-2 text-xs flex-wrap">
+                  <span class="text-slate-400">
+                    <span class="text-slate-500">Permissions:</span> 
+                    <code class="text-primary ml-1">{{ server.permissions }}</code>
+                  </span>
+                  <span class="text-slate-400">
+                    <span class="text-slate-500">Size:</span> 
+                    <span class="text-white ml-1">{{ formatSize(server.size) }}</span>
+                  </span>
+                  <span v-if="server.version" class="text-slate-400">
+                    <span class="text-slate-500">Version:</span> 
+                    <code class="text-green-400 ml-1">{{ server.version }}</code>
+                  </span>
+                  <span v-else class="text-slate-400">
+                    <span class="text-slate-500">Version:</span> 
+                    <span class="text-red-400 ml-1">Unable to detect</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex gap-2 mt-4">
+              <button 
+                type="button"
+                class="btn btn-sm btn-error"
+                @click.prevent.stop="showCleanupConfirmation"
+                :disabled="!hasSelectedServers || cleaning"
+              >
+                <svg v-if="!cleaning" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span v-if="cleaning" class="loading loading-spinner loading-xs"></span>
+                {{ cleaning ? 'Cleaning...' : 'Remove Selected' }}
+              </button>
+              <button 
+                type="button"
+                class="btn btn-sm btn-ghost"
+                @click.prevent.stop="selectAllServers"
+              >
+                Select All
+              </button>
+              <button 
+                type="button"
+                class="btn btn-sm btn-ghost"
+                @click.prevent.stop="deselectAllServers"
+              >
+                Deselect All
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Permission Management -->
+      <div class="card bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20 mb-6">
+        <div class="card-body">
+          <h3 class="card-title text-white mb-4">Permission Management</h3>
+          <p class="text-sm text-slate-400 mb-4">
+            Manage executable permissions for Frida servers on the device. Servers must have executable permissions to run.
+          </p>
+          
+          <div class="space-y-3">
+            <div class="flex items-center justify-between p-4 bg-black/30 rounded-lg border" :class="permissionStatus.is_executable ? 'border-green-500/30' : 'border-red-500/30'">
+              <div class="flex items-center gap-3">
+                <div v-if="permissionStatus.is_executable" class="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div v-else class="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="text-white font-medium font-mono text-sm break-all">/data/local/tmp/frida-server</div>
+                  <div class="text-sm text-slate-400 mt-1">
+                    <span v-if="permissionStatus.exists">
+                      Permissions: <code class="text-primary">{{ permissionStatus.permissions }}</code>
+                      <span v-if="permissionStatus.is_executable" class="ml-2 text-green-400">✓ Executable</span>
+                      <span v-else class="ml-2 text-red-400">✗ Not Executable</span>
+                    </span>
+                    <span v-else class="text-red-400">File does not exist</span>
+                  </div>
+                </div>
+              </div>
+              <button 
+                type="button"
+                class="btn btn-sm btn-primary flex-shrink-0"
+                @click.prevent.stop="fixPermissions"
+                :disabled="fixingPermissions || !permissionStatus.exists || permissionStatus.is_executable"
+              >
+                <svg v-if="!fixingPermissions" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                <span v-if="fixingPermissions" class="loading loading-spinner loading-xs"></span>
+                {{ fixingPermissions ? 'Fixing...' : permissionStatus.is_executable ? 'Executable' : 'Fix Permissions' }}
+              </button>
+            </div>
+
+            <div v-if="discoveredServers.filter(s => s.path !== '/data/local/tmp/frida-server').length > 0" class="mt-4">
+              <div class="text-xs text-slate-400 uppercase tracking-wider mb-2">Other Discovered Servers</div>
+              <div 
+                v-for="server in discoveredServers.filter(s => s.path !== '/data/local/tmp/frida-server')" 
+                :key="server.path"
+                class="flex items-center justify-between p-3 bg-black/30 rounded-lg border mb-2"
+                :class="server.is_executable ? 'border-green-500/30' : 'border-red-500/30'"
+              >
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap mb-1">
+                    <code class="text-sm text-white font-mono break-all">{{ server.path }}</code>
+                    <span v-if="server.is_executable" class="badge badge-xs badge-success">✓ Executable</span>
+                    <span v-else class="badge badge-xs badge-error">✗ Not Executable</span>
+                  </div>
+                  <div class="text-xs text-slate-400 flex items-center gap-3 flex-wrap">
+                    <span><code class="text-primary">{{ server.permissions }}</code></span>
+                    <span>{{ formatSize(server.size) }}</span>
+                    <span v-if="server.version" class="text-green-400">v{{ server.version }}</span>
+                    <span v-else class="text-red-400">Version unknown</span>
+                  </div>
+                </div>
+                <button 
+                  v-if="!server.is_executable"
+                  type="button"
+                  class="btn btn-xs btn-primary flex-shrink-0 ml-2"
+                  @click.prevent.stop="fixServerPermissions(server.path)"
+                  :disabled="fixingPermissions"
+                >
+                  Fix
+                </button>
+                <span v-else class="badge badge-success badge-sm flex-shrink-0 ml-2">Ready</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADB Diagnostics -->
+      <div class="card bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20 mb-6">
+        <div class="card-body">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="card-title text-white">ADB Diagnostics</h3>
+            <button 
+              type="button"
+              class="btn btn-sm btn-outline btn-primary"
+              @click.prevent.stop="runDiagnostics"
+              :disabled="runningDiagnostics"
+            >
+              <svg v-if="!runningDiagnostics" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              <span v-if="runningDiagnostics" class="loading loading-spinner loading-xs"></span>
+              {{ runningDiagnostics ? 'Running Tests...' : 'Run Tests' }}
+            </button>
+          </div>
+
+          <div v-if="diagnosticResults" class="space-y-2">
+            <div 
+              v-for="test in diagnosticResults.tests" 
+              :key="test.name"
+              class="collapse collapse-arrow bg-black/30 border"
+              :class="{
+                'border-green-500/30': test.status === 'pass',
+                'border-yellow-500/30': test.status === 'warning',
+                'border-red-500/30': test.status === 'fail'
+              }"
+            >
+              <input type="checkbox" />
+              <div class="collapse-title flex items-center gap-3">
+                <svg v-if="test.status === 'pass'" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <svg v-else-if="test.status === 'warning'" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div class="flex-1">
+                  <div class="font-medium text-white">{{ test.name }}</div>
+                  <div class="text-xs text-slate-400">{{ test.message }}</div>
+                </div>
+              </div>
+              <div class="collapse-content">
+                <div class="text-sm text-slate-300 mt-2">
+                  <p class="mb-2">{{ test.description }}</p>
+                  <div v-if="Object.keys(test.details).length > 0" class="bg-black/50 p-3 rounded">
+                    <div v-for="(value, key) in test.details" :key="key" class="mb-1">
+                      <span class="text-slate-400">{{ key }}:</span>
+                      <span class="text-white ml-2">{{ value }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="diagnosticResults.summary" class="mt-4 p-4 bg-black/30 rounded-lg">
+              <div class="flex items-center justify-between">
+                <span class="text-white font-medium">Overall Status</span>
+                <div class="flex items-center gap-2">
+                  <span class="text-green-400">{{ diagnosticResults.summary.passed }} passed</span>
+                  <span class="text-slate-500">•</span>
+                  <span class="text-red-400">{{ diagnosticResults.summary.failed }} failed</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="text-center py-8 text-slate-400">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            <p>No diagnostic results yet</p>
+            <p class="text-sm mt-1">Click "Run Tests" to check device status</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cleanup Confirmation Modal -->
+      <div v-if="showCleanupModal" class="modal modal-open">
+        <div class="modal-box bg-neutral-900 border border-primary/30">
+          <h3 class="font-bold text-lg text-white mb-4">Confirm Cleanup</h3>
+          <p class="text-slate-300 mb-4">
+            Are you sure you want to remove {{ selectedServerPaths.length }} Frida server(s)?
+          </p>
+          <div class="bg-black/30 p-3 rounded mb-4 max-h-40 overflow-y-auto">
+            <div v-for="path in selectedServerPaths" :key="path" class="text-sm text-slate-400 mb-1">
+              <code>{{ path }}</code>
+            </div>
+          </div>
+          <div class="modal-action">
+            <button type="button" class="btn btn-ghost" @click="showCleanupModal = false">Cancel</button>
+            <button type="button" class="btn btn-error" @click.prevent.stop="cleanupServers">Remove</button>
+          </div>
+        </div>
       </div>
 
       <!-- Log Viewer -->
@@ -294,10 +634,11 @@
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import LogViewer from '../components/LogViewer.vue'
+import { useToast } from '../composables/useToast'
 
 export default {
   name: 'DeviceDetails',
@@ -312,6 +653,7 @@ export default {
   },
   setup(props) {
     const route = useRoute()
+    const toast = useToast()
     const device = ref(null)
     const loading = ref(true)
     const adbConnected = ref(true)
@@ -326,8 +668,41 @@ export default {
     const selectedCachedVersion = ref('')
     const statusMessage = ref('')
     const statusType = ref('success')
+    
+    // Expose selectedFridaVersion from props for template access
+    const { selectedFridaVersion } = props
+    
+    const discovering = ref(false)
+    const discoveredServers = ref([])
+    const cleaning = ref(false)
+    const showCleanupModal = ref(false)
+    
+    const permissionStatus = ref({
+      exists: false,
+      is_executable: false,
+      permissions: null
+    })
+    const fixingPermissions = ref(false)
+    
+    const diagnosticResults = ref(null)
+    const runningDiagnostics = ref(false)
+    
+    const fridaConnected = ref(false)
+    const testingConnection = ref(false)
+    const lastConnectionTest = ref('')
+    
+    let processCheckInterval = null
+    let connectionCheckInterval = null
 
     const deviceId = computed(() => route.params.id)
+    
+    const hasSelectedServers = computed(() => {
+      return discoveredServers.value.some(s => s.selected)
+    })
+    
+    const selectedServerPaths = computed(() => {
+      return discoveredServers.value.filter(s => s.selected).map(s => s.path)
+    })
 
     const showStatus = (message, type = 'success') => {
       statusMessage.value = message
@@ -485,6 +860,47 @@ export default {
       return mapping[androidAbi] || androidAbi
     }
 
+    const getMappedArchitecture = (androidAbi) => {
+      return mapArchitecture(androidAbi)
+    }
+
+    const getFridaBinaryPath = () => {
+      if (!device.value || !props.selectedFridaVersion) {
+        return 'Select a Frida version to view path'
+      }
+      
+      const arch = getMappedArchitecture(device.value.architecture)
+      return `backend/frida_servers/${props.selectedFridaVersion}/${arch}/frida-server`
+    }
+
+    const getFridaDownloadUrl = () => {
+      if (!device.value || !props.selectedFridaVersion) {
+        return 'Select a Frida version to view URL'
+      }
+      
+      const arch = getMappedArchitecture(device.value.architecture)
+      return `https://github.com/frida/frida/releases/download/${props.selectedFridaVersion}/frida-server-${props.selectedFridaVersion}-android-${arch}.xz`
+    }
+
+    const fixServerPermissions = async (path) => {
+      try {
+        fixingPermissions.value = true
+        const response = await axios.post(
+          `http://localhost:8000/api/devices/${deviceId.value}/frida/permissions`,
+          null,
+          { params: { path } }
+        )
+        
+        toast.success(response.data.message, 'Permissions Updated')
+        await checkPermissions()
+        await discoverServers()
+      } catch (err) {
+        toast.error(err.response?.data?.detail || 'Failed to set permissions', 'Permission Error')
+      } finally {
+        fixingPermissions.value = false
+      }
+    }
+
     const getDeviceColor = (type) => {
       if (type === 'emulator') return 'bg-gradient-to-br from-[#7100d0] to-purple-700'
       if (type === 'physical') return 'bg-gradient-to-br from-[#7100d0] to-black'
@@ -497,9 +913,205 @@ export default {
       return 'badge-warning'
     }
 
-    onMounted(() => {
-      loadDeviceDetails()
-      loadCachedVersions()
+    const formatSize = (size) => {
+      if (!size || size === 'unknown') return 'Unknown'
+      
+      const bytes = parseInt(size)
+      if (isNaN(bytes)) return size
+      
+      if (bytes < 1024) return `${bytes} B`
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+      if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+      return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+    }
+
+    const discoverServers = async () => {
+      try {
+        discovering.value = true
+        const response = await axios.get(`http://localhost:8000/api/devices/${deviceId.value}/frida/discover`)
+        discoveredServers.value = response.data.servers.map(s => ({ ...s, selected: false }))
+        
+        // Update permission status for standard location if found
+        const standardServer = discoveredServers.value.find(s => s.path === '/data/local/tmp/frida-server')
+        if (standardServer) {
+          permissionStatus.value = {
+            exists: true,
+            is_executable: standardServer.is_executable,
+            permissions: standardServer.permissions,
+            path: standardServer.path
+          }
+        }
+        
+        if (discoveredServers.value.length === 0) {
+          toast.info('No Frida servers found on device')
+        } else {
+          toast.success(`Found ${discoveredServers.value.length} Frida server(s)`)
+        }
+      } catch (err) {
+        toast.error('Failed to discover Frida servers', 'Discovery Error')
+        console.error('Discovery error:', err)
+      } finally {
+        discovering.value = false
+      }
+    }
+
+    const selectAllServers = () => {
+      discoveredServers.value.forEach(s => s.selected = true)
+    }
+
+    const deselectAllServers = () => {
+      discoveredServers.value.forEach(s => s.selected = false)
+    }
+
+    const showCleanupConfirmation = () => {
+      if (hasSelectedServers.value) {
+        showCleanupModal.value = true
+      }
+    }
+
+    const cleanupServers = async () => {
+      try {
+        cleaning.value = true
+        showCleanupModal.value = false
+        
+        const response = await axios.post(
+          `http://localhost:8000/api/devices/${deviceId.value}/frida/clean`,
+          { paths: selectedServerPaths.value }
+        )
+        
+        toast.success(response.data.message, 'Cleanup Complete')
+        
+        await discoverServers()
+        await loadDeviceDetails(false)
+      } catch (err) {
+        toast.error(err.response?.data?.detail || 'Failed to clean Frida servers', 'Cleanup Error')
+      } finally {
+        cleaning.value = false
+      }
+    }
+
+    const checkPermissions = async () => {
+      try {
+        const response = await axios.get(`http://localhost:8000/api/devices/${deviceId.value}/frida/permissions`)
+        permissionStatus.value = response.data
+      } catch (err) {
+        console.error('Failed to check permissions:', err)
+      }
+    }
+
+    const fixPermissions = async () => {
+      try {
+        fixingPermissions.value = true
+        const response = await axios.post(`http://localhost:8000/api/devices/${deviceId.value}/frida/permissions`)
+        
+        toast.success(response.data.message, 'Permissions Updated')
+        await checkPermissions()
+      } catch (err) {
+        toast.error(err.response?.data?.detail || 'Failed to set permissions', 'Permission Error')
+      } finally {
+        fixingPermissions.value = false
+      }
+    }
+
+    const runDiagnostics = async () => {
+      try {
+        runningDiagnostics.value = true
+        const response = await axios.get(`http://localhost:8000/api/devices/${deviceId.value}/diagnostics/adb`)
+        diagnosticResults.value = response.data
+        
+        const failed = response.data.tests.filter(t => t.status === 'fail')
+        const warnings = response.data.tests.filter(t => t.status === 'warning')
+        
+        if (failed.length > 0) {
+          failed.forEach(test => {
+            let guidance = test.message
+            if (test.details.note) {
+              guidance += ` - ${test.details.note}`
+            }
+            toast.error(guidance, `${test.name} Failed`)
+          })
+        }
+        
+        if (warnings.length > 0) {
+          warnings.forEach(test => {
+            let guidance = test.message
+            if (test.details.note) {
+              guidance += ` - ${test.details.note}`
+            }
+            toast.warning(guidance, test.name)
+          })
+        }
+        
+        if (failed.length === 0 && warnings.length === 0) {
+          toast.success('All diagnostic tests passed', 'Diagnostics Complete')
+        }
+      } catch (err) {
+        toast.error('Failed to run diagnostics', 'Diagnostic Error')
+        console.error('Diagnostics error:', err)
+      } finally {
+        runningDiagnostics.value = false
+      }
+    }
+
+    const testFridaConnection = async () => {
+      try {
+        testingConnection.value = true
+        const response = await axios.get(`http://localhost:8000/api/devices/${deviceId.value}/frida/test-connection`)
+        
+        fridaConnected.value = response.data.connected
+        lastConnectionTest.value = new Date().toLocaleTimeString()
+        
+        if (!response.data.connected && device.value?.frida_server_running) {
+          console.warn('Frida server running but not responding:', response.data.message)
+        }
+      } catch (err) {
+        fridaConnected.value = false
+        console.error('Connection test error:', err)
+      } finally {
+        testingConnection.value = false
+      }
+    }
+
+    const startConnectionTracking = () => {
+      processCheckInterval = setInterval(async () => {
+        await loadDeviceDetails(false)
+      }, 3000)
+      
+      connectionCheckInterval = setInterval(async () => {
+        if (device.value?.frida_server_running) {
+          await testFridaConnection()
+        } else {
+          fridaConnected.value = false
+        }
+      }, 10000)
+    }
+
+    const stopConnectionTracking = () => {
+      if (processCheckInterval) {
+        clearInterval(processCheckInterval)
+        processCheckInterval = null
+      }
+      if (connectionCheckInterval) {
+        clearInterval(connectionCheckInterval)
+        connectionCheckInterval = null
+      }
+    }
+
+    onMounted(async () => {
+      await loadDeviceDetails()
+      await loadCachedVersions()
+      await checkPermissions()
+      await discoverServers()
+      
+      startConnectionTracking()
+      
+      if (device.value?.frida_server_running) {
+        await testFridaConnection()
+      }
+    })
+
+    onUnmounted(() => {
+      stopConnectionTracking()
     })
 
     return {
@@ -515,8 +1127,22 @@ export default {
       restarting,
       cachedVersions,
       selectedCachedVersion,
+      selectedFridaVersion,
       statusMessage,
       statusType,
+      discovering,
+      discoveredServers,
+      cleaning,
+      showCleanupModal,
+      hasSelectedServers,
+      selectedServerPaths,
+      permissionStatus,
+      fixingPermissions,
+      diagnosticResults,
+      runningDiagnostics,
+      fridaConnected,
+      testingConnection,
+      lastConnectionTest,
       refreshStatus,
       reconnectDevice,
       loadCachedVersions,
@@ -525,6 +1151,20 @@ export default {
       startFrida,
       stopFrida,
       restartFrida,
+      discoverServers,
+      selectAllServers,
+      deselectAllServers,
+      showCleanupConfirmation,
+      cleanupServers,
+      checkPermissions,
+      fixPermissions,
+      runDiagnostics,
+      testFridaConnection,
+      getMappedArchitecture,
+      getFridaBinaryPath,
+      getFridaDownloadUrl,
+      fixServerPermissions,
+      formatSize,
       getDeviceColor,
       getStatusBadge
     }

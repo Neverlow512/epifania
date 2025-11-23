@@ -261,20 +261,6 @@ export default {
         const logType = data.type
         
         if (logs[logType]) {
-          // Auto-start streaming for non-logcat logs when first message arrives
-          // Only if user hasn't manually stopped it
-          if (logType !== 'logcat' && 
-              !streamingLogs[logType] && 
-              !manuallyStoppedLogs[logType] &&
-              logs[logType].length === 0) {
-            ensureWebSocketReady().then(() => {
-              try {
-                ws.send(JSON.stringify({ action: 'start', log_type: logType }))
-                streamingLogs[logType] = true
-              } catch {}
-            })
-          }
-          
           logs[logType].push({
             timestamp: data.timestamp,
             level: data.level,
