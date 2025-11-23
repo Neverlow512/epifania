@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-black">
     <!-- Header -->
-    <div class="navbar bg-black/80 backdrop-blur-md shadow-xl border-b border-primary/20">
+    <div class="navbar bg-black/80 backdrop-blur-md shadow-xl border-b border-primary/20 relative z-50">
       <div class="flex-1">
         <div class="flex items-center px-4">
           <div class="leading-tight">
@@ -24,7 +24,10 @@
             </svg>
             Frida
           </label>
-          <div tabindex="0" class="dropdown-content z-[1] card card-compact w-80 p-4 shadow-2xl bg-neutral-900 border border-primary/30 mt-2">
+          <div
+            tabindex="0"
+            class="dropdown-content fixed right-4 top-16 z-[9999] card card-compact w-80 p-4 shadow-2xl bg-neutral-900 border border-primary/30 mt-2"
+          >
             <div class="card-body">
               <h3 class="font-bold text-white mb-3">Frida Configuration</h3>
               

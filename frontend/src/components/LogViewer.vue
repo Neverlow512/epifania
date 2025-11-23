@@ -71,6 +71,7 @@
                 </svg>
               </button>
               <span class="text-white font-semibold">Frida Installation</span>
+              <div class="badge badge-xs badge-info ml-2">Auto</div>
               <div class="badge badge-sm" :class="streamingLogs.frida_install ? 'badge-success' : 'badge-ghost'">
                 {{ streamingLogs.frida_install ? 'Streaming' : 'Stopped' }}
               </div>
@@ -116,6 +117,7 @@
                 </svg>
               </button>
               <span class="text-white font-semibold">Frida Server</span>
+              <div class="badge badge-xs badge-info ml-2">Auto</div>
               <div class="badge badge-sm" :class="streamingLogs.frida_server ? 'badge-success' : 'badge-ghost'">
                 {{ streamingLogs.frida_server ? 'Streaming' : 'Stopped' }}
               </div>
@@ -161,6 +163,7 @@
                 </svg>
               </button>
               <span class="text-white font-semibold">ADB Operations</span>
+              <div class="badge badge-xs badge-info ml-2">Auto</div>
               <div class="badge badge-sm" :class="streamingLogs.adb_operations ? 'badge-success' : 'badge-ghost'">
                 {{ streamingLogs.adb_operations ? 'Streaming' : 'Stopped' }}
               </div>
@@ -200,6 +203,8 @@ export default {
     }
   },
   setup(props) {
+    const autoStreamLogs = ['frida_install', 'frida_server', 'adb_operations']
+    
     const logs = reactive({
       logcat: [],
       frida_install: [],
@@ -332,27 +337,9 @@ export default {
 
     const handleToggle = (logType) => {
       if (expandedLogs[logType]) {
-        // Auto start subscription for non-logcat logs on expand
-        // Only if user hasn't manually stopped it
-        if (logType !== 'logcat' && !streamingLogs[logType] && !manuallyStoppedLogs[logType]) {
-          ensureWebSocketReady().then(() => {
-            try {
-              ws.send(JSON.stringify({ action: 'start', log_type: logType }))
-              streamingLogs[logType] = true
-            } catch {}
-          })
-        }
         nextTick(() => {
           scrollToBottom(logType)
         })
-      } else {
-        // Stop subscription on collapse only for non-logcat
-        if (logType !== 'logcat' && streamingLogs[logType] && ws && ws.readyState === WebSocket.OPEN) {
-          try {
-            ws.send(JSON.stringify({ action: 'stop', log_type: logType }))
-          } catch {}
-          streamingLogs[logType] = false
-        }
       }
     }
 
@@ -402,7 +389,26 @@ export default {
     }
 
     onMounted(() => {
+      // Reset manual stop flags for auto-stream logs on page load
+      autoStreamLogs.forEach(logType => {
+        manuallyStoppedLogs[logType] = false
+      })
+      
       connectWebSocket()
+      
+      // Auto-start streaming for debug logs when WebSocket is ready
+      ensureWebSocketReady().then(() => {
+        autoStreamLogs.forEach(logType => {
+          if (!manuallyStoppedLogs[logType]) {
+            try {
+              ws.send(JSON.stringify({ action: 'start', log_type: logType }))
+              streamingLogs[logType] = true
+            } catch (err) {
+              console.error(`Failed to auto-start ${logType}:`, err)
+            }
+          }
+        })
+      })
     })
 
     onUnmounted(() => {
