@@ -165,7 +165,7 @@
           
           <!-- Install Section -->
           <div class="mb-6">
-            <h4 class="text-lg font-semibold text-white mb-3">Install Frida Server</h4>
+            <h4 class="text-lg font-semibold text-white mb-3">Install Frida Server Auto</h4>
             <div class="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4 mb-4">
               <div class="flex items-start gap-3">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -174,7 +174,7 @@
                 <div class="text-sm text-blue-200">
                   <p class="font-medium mb-1">Automatic Configuration</p>
                   <p class="text-blue-300/90">
-                    The system will automatically select the appropriate Frida server binary based on your device's architecture and platform. The server will be downloaded, deployed to the device, and started with optimal settings.
+                    The system will automatically select the appropriate Frida server binary based on your device's architecture, platform, and dependencies. The newest compatible version will be downloaded, deployed to the device, and started with optimal settings.
                   </p>
                 </div>
               </div>
@@ -187,7 +187,7 @@
                 <div class="space-y-2">
                   <div class="flex items-center justify-between text-sm">
                     <span class="text-slate-400">Frida Version:</span>
-                    <code class="text-primary font-mono font-semibold">{{ selectedFridaVersion || 'Not selected' }}</code>
+                    <code class="text-primary font-mono font-semibold">{{ autoFridaVersion || 'Loading...' }}</code>
                   </div>
                   
                   <div class="flex items-center justify-between text-sm">
@@ -228,14 +228,14 @@
             <button 
               type="button"
               class="btn btn-primary gap-2 w-full"
-              @click.prevent.stop="installFrida"
-              :disabled="installing || !selectedFridaVersion"
+              @click.prevent.stop="installFridaAuto"
+              :disabled="installing || !autoFridaVersion"
             >
               <svg v-if="!installing" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
               <span v-if="installing" class="loading loading-spinner loading-sm"></span>
-              {{ installing ? 'Installing...' : `Install Frida ${selectedFridaVersion || 'Server'}` }}
+              {{ installing ? 'Installing...' : `Install Frida ${autoFridaVersion || 'Server'}` }}
             </button>
           </div>
 
@@ -243,9 +243,9 @@
 
           <!-- Push Cached Server -->
           <div class="mb-6">
-            <h4 class="text-lg font-semibold text-white mb-3">Push Cached Server</h4>
+            <h4 class="text-lg font-semibold text-white mb-3">Push Cached Server (Custom)</h4>
             <p class="text-sm text-slate-400 mb-4">
-              Push a previously downloaded Frida server binary to the device without re-downloading.
+              Push a previously downloaded custom Frida server binary to the device without re-downloading. Use this for custom versions that were cached from the Frida dropdown menu.
             </p>
             <div class="flex gap-2">
               <select 
@@ -668,6 +668,8 @@ export default {
     const selectedCachedVersion = ref('')
     const statusMessage = ref('')
     const statusType = ref('success')
+    const autoFridaVersion = ref('')
+    const autoFridaArch = ref('')
     
     // Expose selectedFridaVersion from props for template access
     const { selectedFridaVersion } = props
@@ -757,6 +759,43 @@ export default {
         cachedVersions.value = response.data.cached
       } catch (err) {
         console.error('Failed to load cached versions:', err)
+      }
+    }
+
+    const loadRecommendedVersion = async () => {
+      try {
+        const response = await axios.get(`http://localhost:8000/api/devices/${deviceId.value}/frida/recommended`)
+        autoFridaVersion.value = response.data.version
+        autoFridaArch.value = response.data.architecture
+        console.log(`Recommended Frida version: ${autoFridaVersion.value} for ${autoFridaArch.value}`)
+      } catch (err) {
+        console.error('Failed to load recommended version:', err)
+        autoFridaVersion.value = 'Unable to determine'
+      }
+    }
+
+    const installFridaAuto = async () => {
+      if (!autoFridaVersion.value) {
+        toast.error('Unable to determine compatible Frida version', 'Installation Failed')
+        return
+      }
+
+      try {
+        installing.value = true
+        toast.info(`Installing Frida ${autoFridaVersion.value}...`, 'Frida Installation')
+        const response = await axios.post(
+          `http://localhost:8000/api/devices/${deviceId.value}/frida/install`,
+          { version: autoFridaVersion.value }
+        )
+        showStatus(response.data.message, 'success')
+        toast.success(response.data.message, 'Frida Installation')
+        await loadDeviceDetails(false)
+      } catch (err) {
+        const errorMsg = err.response?.data?.detail || 'Failed to install Frida server'
+        showStatus(errorMsg, 'error')
+        toast.error(errorMsg, 'Installation Failed')
+      } finally {
+        installing.value = false
       }
     }
 
@@ -878,21 +917,21 @@ export default {
     }
 
     const getFridaBinaryPath = () => {
-      if (!device.value || !props.selectedFridaVersion) {
-        return 'Select a Frida version to view path'
+      if (!device.value || !autoFridaVersion.value) {
+        return 'Loading...'
       }
       
       const arch = getMappedArchitecture(device.value.architecture)
-      return `backend/frida_servers/${props.selectedFridaVersion}/${arch}/frida-server`
+      return `backend/frida_servers/${autoFridaVersion.value}/${arch}/frida-server`
     }
 
     const getFridaDownloadUrl = () => {
-      if (!device.value || !props.selectedFridaVersion) {
-        return 'Select a Frida version to view URL'
+      if (!device.value || !autoFridaVersion.value) {
+        return 'Loading...'
       }
       
       const arch = getMappedArchitecture(device.value.architecture)
-      return `https://github.com/frida/frida/releases/download/${props.selectedFridaVersion}/frida-server-${props.selectedFridaVersion}-android-${arch}.xz`
+      return `https://github.com/frida/frida/releases/download/${autoFridaVersion.value}/frida-server-${autoFridaVersion.value}-android-${arch}.xz`
     }
 
     const fixServerPermissions = async (path) => {
@@ -1112,6 +1151,7 @@ export default {
 
     onMounted(async () => {
       await loadDeviceDetails()
+      await loadRecommendedVersion()
       await loadCachedVersions()
       await checkPermissions()
       await discoverServers()
@@ -1141,6 +1181,8 @@ export default {
       cachedVersions,
       selectedCachedVersion,
       selectedFridaVersion,
+      autoFridaVersion,
+      autoFridaArch,
       statusMessage,
       statusType,
       discovering,
@@ -1159,7 +1201,9 @@ export default {
       refreshStatus,
       reconnectDevice,
       loadCachedVersions,
+      loadRecommendedVersion,
       installFrida,
+      installFridaAuto,
       pushCachedServer,
       startFrida,
       stopFrida,

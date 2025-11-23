@@ -208,6 +208,29 @@ async def get_cached_frida_versions():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/devices/{device_id}/frida/recommended")
+async def get_recommended_frida_version(device_id: str):
+    try:
+        logger.info(f"Recommended Frida version requested for {device_id}")
+        
+        # Get device details first
+        device_info = device_manager.get_device_details(device_id)
+        if not device_info:
+            raise HTTPException(status_code=404, detail="Device not found")
+        
+        recommended = installer.get_recommended_version(device_info)
+        
+        if recommended:
+            return recommended
+        else:
+            raise HTTPException(status_code=404, detail="Could not determine recommended version")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get recommended Frida version: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/devices/{device_id}/frida/install")
 async def install_frida(device_id: str, request: FridaInstallRequest):
     try:

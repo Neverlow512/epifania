@@ -62,6 +62,67 @@ class Installer:
             logger.error(f"Failed to fetch Frida versions: {str(e)}")
             return []
     
+    def get_recommended_version(self, device_info: Dict[str, any]) -> Optional[Dict[str, str]]:
+        try:
+            if not device_info:
+                logger.error("Device info not provided")
+                return None
+            
+            sdk = int(device_info.get("sdk_version", 0))
+            android_ver = device_info.get("android_version", "Unknown")
+            arch = device_info.get("architecture", "unknown")
+            frida_arch = self.get_architecture_mapping(arch)
+            device_serial = device_info.get("serial", "unknown")
+            
+            logger.info(f"Device {device_serial}: SDK {sdk}, Android {android_ver}, Arch {frida_arch}")
+            
+            # Check if we already have a cached version for this architecture
+            cached = self.get_cached_versions()
+            if cached:
+                for version in sorted(cached.keys(), reverse=True):
+                    if frida_arch in cached[version]:
+                        logger.info(f"Found cached Frida version {version} for {frida_arch}")
+                        return {
+                            "version": version,
+                            "name": version,
+                            "architecture": frida_arch,
+                            "sdk_version": sdk,
+                            "android_version": android_ver,
+                            "reason": "Latest cached version for device architecture",
+                            "cached": True
+                        }
+            
+            # Fetch available versions from GitHub
+            versions = self.fetch_available_versions(limit=20)
+            if not versions:
+                logger.error("No Frida versions available")
+                return None
+            
+            # Filter out prereleases for stability
+            stable_versions = [v for v in versions if not v.get("prerelease", False)]
+            if not stable_versions:
+                stable_versions = versions
+            
+            # Get the latest stable version
+            recommended = stable_versions[0] if stable_versions else None
+            
+            if recommended:
+                logger.info(f"Recommended Frida version for {device_serial}: {recommended['version']}")
+                return {
+                    "version": recommended["version"],
+                    "name": recommended.get("name", recommended["version"]),
+                    "architecture": frida_arch,
+                    "sdk_version": sdk,
+                    "android_version": android_ver,
+                    "reason": "Latest stable version compatible with device",
+                    "cached": False
+                }
+            
+            return None
+        except Exception as e:
+            logger.error(f"Failed to determine recommended version: {str(e)}")
+            return None
+    
     def get_cached_versions(self) -> Dict[str, List[str]]:
         try:
             cached = {}

@@ -22,19 +22,19 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            Frida
+            Frida (Custom)
           </label>
           <div
             tabindex="0"
             class="dropdown-content fixed right-4 top-16 z-[9999] card card-compact w-80 p-4 shadow-2xl bg-neutral-900 border border-primary/30 mt-2"
           >
             <div class="card-body">
-              <h3 class="font-bold text-white mb-3">Frida Configuration</h3>
+              <h3 class="font-bold text-white mb-3">Frida Custom Download</h3>
               
               <!-- Version Selector -->
               <div class="form-control mb-4">
                 <label class="label">
-                  <span class="label-text text-slate-400">Select Version</span>
+                  <span class="label-text text-slate-400">Select Custom Version</span>
                 </label>
                 <select 
                   v-model="selectedFridaVersion" 
@@ -48,13 +48,27 @@
                 </select>
               </div>
 
+              <!-- Download Button -->
+              <button 
+                type="button"
+                class="btn btn-sm btn-primary w-full mb-4"
+                @click="downloadCustomVersion"
+                :disabled="!selectedFridaVersion || isDownloading"
+              >
+                <svg v-if="!isDownloading" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                <span v-if="isDownloading" class="loading loading-spinner loading-xs"></span>
+                {{ isDownloading ? 'Downloading...' : 'Download & Cache' }}
+              </button>
+
               <!-- Warning Message -->
               <div class="alert alert-warning shadow-lg border-0 bg-yellow-900/20 border border-yellow-700/30">
                 <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
                 <span class="text-yellow-200 text-xs">
-                  For best results, use emulators for Frida server installation. Physical devices may require manual setup or root access.
+                  For best results, use the Auto mode which automatically selects the optimal Frida version for your device.
                 </span>
               </div>
             </div>
@@ -114,6 +128,7 @@ export default {
     const fridaVersions = ref([])
     const selectedFridaVersion = ref('')
     const isRestartingAdb = ref(false)
+    const isDownloading = ref(false)
     const { success, error, info, warning } = useToast()
     const { isBackendConnected, startAutoReconnect, checkConnection } = useApiConnection()
 
@@ -173,6 +188,64 @@ export default {
       }
     }
 
+    const downloadCustomVersion = async () => {
+      if (!selectedFridaVersion.value) {
+        warning('Please select a Frida version first', 'Download')
+        return
+      }
+
+      isDownloading.value = true
+
+      try {
+        // Check if already cached
+        const cachedResponse = await axios.get('http://localhost:8000/api/frida/cached')
+        const cached = cachedResponse.data.cached
+        
+        // Get device architecture to check if this specific version+arch is cached
+        const devicesResponse = await axios.get('http://localhost:8000/api/devices')
+        const devices = devicesResponse.data.devices
+        
+        if (devices.length === 0) {
+          warning('No devices connected. Connect a device to download the appropriate architecture.', 'Download')
+          isDownloading.value = false
+          return
+        }
+
+        const device = devices[0]
+        const deviceArch = device.architecture
+        
+        // Map architecture
+        const archMapping = {
+          'armeabi-v7a': 'arm',
+          'armeabi': 'arm',
+          'arm64-v8a': 'arm64',
+          'x86': 'x86',
+          'x86_64': 'x86_64'
+        }
+        const fridaArch = archMapping[deviceArch] || deviceArch
+        
+        // Check if this version+arch combo is already cached
+        if (cached[selectedFridaVersion.value] && cached[selectedFridaVersion.value].includes(fridaArch)) {
+          success(`Frida ${selectedFridaVersion.value} (${fridaArch}) is already cached`, 'Already Downloaded')
+          isDownloading.value = false
+          return
+        }
+
+        info(`Downloading Frida ${selectedFridaVersion.value} for ${fridaArch}...`, 'Custom Download')
+        
+        const response = await axios.post(
+          `http://localhost:8000/api/devices/${device.serial}/frida/install`,
+          { version: selectedFridaVersion.value }
+        )
+        
+        success(`Frida ${selectedFridaVersion.value} (${fridaArch}) downloaded and cached successfully`, 'Custom Download')
+      } catch (err) {
+        error(err.response?.data?.detail || 'Failed to download Frida version', 'Download Failed')
+      } finally {
+        isDownloading.value = false
+      }
+    }
+
     onMounted(() => {
       // Start auto-reconnect system
       startAutoReconnect()
@@ -198,9 +271,11 @@ export default {
       fridaVersions,
       selectedFridaVersion,
       isRestartingAdb,
+      isDownloading,
       isBackendConnected,
       loadFridaVersions,
-      restartAdb
+      restartAdb,
+      downloadCustomVersion
     }
   }
 }
