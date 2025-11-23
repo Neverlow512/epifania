@@ -25,6 +25,17 @@ A GUI-based Dynamic Instrumentation Platform wrapping Frida and ADB for security
 - ✅ Cached Frida server management and deployment
 - ✅ Auto-refresh device list with connection state tracking
 - ✅ Vue Router integration with multi-page navigation
+- ✅ Health monitoring system with periodic checks
+- ✅ Process management with cleanup and PID tracking
+- ✅ Backend auto-reconnect with exponential backoff
+- ✅ Toast notification system with pinning capability
+- ✅ Frida server discovery and scanning on devices
+- ✅ Permission management for Frida binaries
+- ✅ Recommended Frida version detection based on device
+- ✅ Frida connection testing and validation
+- ✅ Multiple Frida server cleanup functionality
+- ✅ Comprehensive ADB diagnostics system
+- ✅ Custom Frida version download from UI dropdown
 
 **Planned Features:**
 - 🔄 Process enumeration and management
@@ -44,7 +55,7 @@ The backend serves as the orchestration layer, managing device connections and F
 - **FastAPI**: High-performance web framework for API endpoints
 - **Frida**: Dynamic instrumentation toolkit for runtime analysis
 - **pure-python-adb**: Full Android Debug Bridge integration for device management and communication
-- **Modular Architecture**: Separate managers for ADB, devices, and installation tasks
+- **Modular Architecture**: Separate managers for ADB, devices, installation tasks, health monitoring, and diagnostics
 
 ### Frontend (Vue.js/Vite)
 
@@ -59,6 +70,8 @@ The frontend provides a professional, modern dashboard designed for security res
 - **WebSocket**: Real-time bidirectional communication for log streaming
 - **Modern Typography**: Space Grotesk display font for brand identity
 - **Interactive Feedback**: Button states with focus rings, press animations, and disabled states
+- **Toast Notifications**: Rich notification system with success, error, warning, and info types
+- **Auto-Reconnect**: Automatic backend reconnection with exponential backoff strategy
 
 ## Prerequisites
 
@@ -68,6 +81,7 @@ Before installing Epifania, ensure the following dependencies are installed:
 - **Node.js 18+**: Frontend build tooling and development server
 - **ADB**: Android Debug Bridge must be installed and available in PATH
 - **USB Debugging**: Enable USB debugging on target Android devices
+- **Linux**: This tool is designed for Linux systems
 
 ## Installation
 
@@ -75,18 +89,10 @@ Before installing Epifania, ensure the following dependencies are installed:
 
 Use the automated setup script to create isolated virtual environments and install all dependencies:
 
-**Linux/macOS:**
 ```bash
 git clone https://github.com/Neverlow512/epifania.git
 cd epifania
 ./setup.sh
-```
-
-**Windows:**
-```cmd
-git clone https://github.com/Neverlow512/epifania.git
-cd epifania
-setup.bat
 ```
 
 The setup script will:
@@ -111,7 +117,7 @@ cd epifania
 ```bash
 cd backend
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 deactivate
@@ -137,14 +143,8 @@ cd ..
 
 Execute the startup script from the project root:
 
-**Linux/macOS:**
 ```bash
 ./start.sh
-```
-
-**Windows:**
-```bash
-python launcher.py
 ```
 
 The script automatically uses the virtual environment and starts both services:
@@ -163,7 +163,7 @@ Alternatively, run services independently:
 **Backend:**
 ```bash
 cd backend
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -175,19 +175,68 @@ npm run dev
 
 ## API Endpoints
 
-### Health Check
+### Health & System Management
+
+#### Health Check
 
 ```
 GET /health
 ```
 
-Returns the operational status of the backend service and ADB connection.
+Returns the operational status of the backend service, ADB connection, and health manager status.
 
 **Response:**
 ```json
 {
   "status": "healthy",
-  "adb_connected": true
+  "adb_connected": true,
+  "device_count": 1,
+  "timestamp": "2024-11-23T10:30:00.000Z",
+  "health_manager": {
+    "is_healthy": true,
+    "last_check": "2024-11-23T10:29:55.000Z",
+    "failure_count": 0,
+    "max_failures": 3,
+    "running": true
+  }
+}
+```
+
+#### System Health Check
+
+```
+GET /api/system/health
+```
+
+Runs comprehensive health checks on all registered system components.
+
+**Response:**
+```json
+{
+  "overall_healthy": true,
+  "checks": {
+    "adb_connection": {
+      "status": "healthy",
+      "healthy": true
+    }
+  },
+  "timestamp": "2024-11-23T10:30:00.000Z"
+}
+```
+
+#### Restart ADB Server
+
+```
+POST /api/adb/restart
+```
+
+Restarts the ADB server daemon to resolve connection issues.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "ADB server restarted successfully"
 }
 ```
 
@@ -309,6 +358,27 @@ Lists locally cached Frida server binaries.
 }
 ```
 
+#### Get Recommended Version
+
+```
+GET /api/devices/{device_id}/frida/recommended
+```
+
+Determines the optimal Frida version for a specific device based on architecture, SDK version, and cached binaries.
+
+**Response:**
+```json
+{
+  "version": "17.5.1",
+  "name": "17.5.1",
+  "architecture": "x86",
+  "sdk_version": 28,
+  "android_version": "9",
+  "reason": "Latest stable version compatible with device",
+  "cached": true
+}
+```
+
 #### Install Frida Server
 
 ```
@@ -359,6 +429,205 @@ POST /api/devices/{device_id}/frida/restart
 ```
 
 Controls the Frida server process on the device.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Frida server started successfully"
+}
+```
+
+#### Discover Frida Servers
+
+```
+GET /api/devices/{device_id}/frida/discover
+```
+
+Scans the device for all Frida server binaries in common locations.
+
+**Response:**
+```json
+{
+  "servers": [
+    {
+      "path": "/data/local/tmp/frida-server",
+      "permissions": "-rwxr-xr-x",
+      "size": "45678901",
+      "is_executable": true,
+      "version": "17.5.1"
+    }
+  ]
+}
+```
+
+#### Clean Frida Servers
+
+```
+POST /api/devices/{device_id}/frida/clean
+```
+
+Removes specified Frida server binaries from the device.
+
+**Request Body:**
+```json
+{
+  "paths": [
+    "/data/local/tmp/frida-server-old",
+    "/system/bin/frida-server"
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Successfully removed 2 server(s)",
+  "removed": [
+    "/data/local/tmp/frida-server-old",
+    "/system/bin/frida-server"
+  ],
+  "failed": []
+}
+```
+
+#### Check Permissions
+
+```
+GET /api/devices/{device_id}/frida/permissions?path=/data/local/tmp/frida-server
+```
+
+Checks the permissions of a Frida server binary on the device.
+
+**Response:**
+```json
+{
+  "exists": true,
+  "is_executable": true,
+  "permissions": "-rwxr-xr-x",
+  "path": "/data/local/tmp/frida-server"
+}
+```
+
+#### Set Permissions
+
+```
+POST /api/devices/{device_id}/frida/permissions?path=/data/local/tmp/frida-server
+```
+
+Sets executable permissions (755) on a Frida server binary.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Successfully set executable permissions for /data/local/tmp/frida-server",
+  "permissions": "-rwxr-xr-x"
+}
+```
+
+#### Test Frida Connection
+
+```
+GET /api/devices/{device_id}/frida/test-connection
+```
+
+Tests the Frida connection by attempting to connect and enumerate processes.
+
+**Response:**
+```json
+{
+  "connected": true,
+  "message": "Frida connection successful",
+  "details": {
+    "device_name": "Google Pixel 3",
+    "device_type": "usb",
+    "process_count": 245
+  }
+}
+```
+
+### Diagnostics
+
+#### Run ADB Diagnostics
+
+```
+GET /api/devices/{device_id}/diagnostics/adb
+```
+
+Runs comprehensive ADB diagnostics including connectivity, root access, permissions, SELinux status, storage, and ADB version checks.
+
+**Response:**
+```json
+{
+  "device_id": "emulator-5554",
+  "timestamp": "2024-11-23T10:30:00.000Z",
+  "tests": [
+    {
+      "name": "Shell Connectivity",
+      "description": "Tests basic ADB shell command execution",
+      "status": "pass",
+      "message": "Shell commands execute successfully",
+      "details": {
+        "response": "connectivity_test"
+      }
+    },
+    {
+      "name": "Root Access",
+      "description": "Checks if device has root access available",
+      "status": "pass",
+      "message": "Root access is available",
+      "details": {
+        "uid": "0 (root)"
+      }
+    },
+    {
+      "name": "Write Permissions",
+      "description": "Tests write access to /data/local/tmp directory",
+      "status": "pass",
+      "message": "Write permissions to /data/local/tmp are available",
+      "details": {
+        "path": "/data/local/tmp"
+      }
+    },
+    {
+      "name": "SELinux Status",
+      "description": "Checks SELinux enforcement mode",
+      "status": "pass",
+      "message": "SELinux is permissive (optimal for Frida)",
+      "details": {
+        "mode": "Permissive"
+      }
+    },
+    {
+      "name": "Storage Space",
+      "description": "Checks available storage in /data partition",
+      "status": "pass",
+      "message": "Sufficient storage: 2.5G available",
+      "details": {
+        "available": "2.5G",
+        "usage": "45%"
+      }
+    },
+    {
+      "name": "ADB Version",
+      "description": "Checks ADB daemon version on device",
+      "status": "pass",
+      "message": "ADB server version: 41",
+      "details": {
+        "server_version": 41
+      }
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "overall_status": "pass"
+  }
+}
+```
 
 ### Log Streaming
 
@@ -419,6 +688,7 @@ Real-time bidirectional WebSocket connection for log streaming.
 | Device Management | pure-python-adb | 0.3.0.dev0 | Android device communication |
 | Data Validation | Pydantic | 2.12.4 | Request/response validation |
 | WebSocket | websockets | 13.1 | Real-time log streaming |
+| Process Management | psutil | 6.1.0 | System and process monitoring |
 | Frontend Framework | Vue 3 | 3.5.24 | Reactive user interface |
 | Routing | Vue Router | 4.6.3 | Client-side navigation |
 | Build Tool | Vite | 7.2.4 | Development server and bundler |
@@ -439,10 +709,29 @@ Real-time bidirectional WebSocket connection for log streaming.
 
 - **Version Management**: Browse and select from available Frida server versions from GitHub releases
 - **Automated Installation**: One-click download, installation, and deployment of Frida server to devices
+- **Recommended Versions**: Automatic detection of optimal Frida version based on device specifications
 - **Server Lifecycle Control**: Start, stop, and restart Frida server processes on target devices
 - **Cached Binary Management**: Store and reuse downloaded Frida server binaries for faster deployment
 - **Architecture Detection**: Automatic mapping of Android ABIs to Frida architectures
 - **Status Monitoring**: Real-time display of Frida server version and running status
+- **Server Discovery**: Scan devices for all Frida server binaries in common locations
+- **Permission Management**: Check and set executable permissions on Frida binaries
+- **Connection Testing**: Validate Frida connectivity by enumerating processes
+- **Cleanup Tools**: Remove old or duplicate Frida server binaries from devices
+
+### Health Monitoring & Diagnostics
+
+- **Health Manager**: Periodic health checks with configurable intervals
+- **Process Management**: Automatic cleanup of stale processes and PID tracking
+- **System Health API**: Comprehensive health status reporting
+- **ADB Diagnostics**: Full diagnostic suite including:
+  - Shell connectivity tests
+  - Root access verification
+  - Write permission checks
+  - SELinux status monitoring
+  - Storage space analysis
+  - ADB version checking
+- **Failure Tracking**: Consecutive failure counting with configurable thresholds
 
 ### Real-time Logging
 
@@ -465,6 +754,17 @@ Real-time bidirectional WebSocket connection for log streaming.
 - **Visual Feedback**: Loading states, status badges, and interactive animations
 - **Professional Theme**: Security-focused dark theme with purple accent color
 - **Navigation**: Client-side routing with smooth page transitions
+- **Toast Notifications**: Rich notification system with success, error, warning, and info types
+- **Auto-Reconnect**: Automatic backend reconnection with exponential backoff strategy
+- **Custom Frida Download**: Download specific Frida versions from UI dropdown menu
+
+### Backend Connection Management
+
+- **Auto-Reconnect**: Automatic reconnection with exponential backoff (1s, 2s, 5s, 10s, 30s)
+- **Connection Monitoring**: Periodic health checks every 10 seconds
+- **Failure Tracking**: Tracks consecutive failures with configurable retry limits
+- **Status Indicators**: Real-time connection status display in UI
+- **Silent Checks**: Background connection verification without user interruption
 
 ## Project Structure
 
@@ -477,7 +777,12 @@ epifania/
 │   │   ├── device_manager.py     # Device enumeration
 │   │   ├── installer.py          # Frida server management
 │   │   ├── log_streamer.py       # Real-time log streaming
-│   │   └── logger.py             # Centralized logging
+│   │   ├── logger.py             # Centralized logging
+│   │   └── diagnostics.py        # ADB diagnostics system
+│   ├── monitoring/               # Health and process monitoring
+│   │   ├── __init__.py
+│   │   ├── health_manager.py     # Health check system
+│   │   └── process_manager.py    # Process cleanup and PID tracking
 │   ├── frida_servers/            # Cached Frida server binaries
 │   │   └── {version}/            # Version-specific directories
 │   │       └── {arch}/           # Architecture-specific binaries
@@ -495,7 +800,11 @@ epifania/
 │   ├── src/
 │   │   ├── components/           # Reusable Vue components
 │   │   │   ├── DeviceCard.vue    # Device card component
-│   │   │   └── LogViewer.vue     # Log streaming component
+│   │   │   ├── LogViewer.vue     # Log streaming component
+│   │   │   └── ToastNotification.vue  # Toast notification system
+│   │   ├── composables/          # Vue composables
+│   │   │   ├── useApiConnection.js    # Backend connection management
+│   │   │   └── useToast.js            # Toast notification composable
 │   │   ├── router/               # Vue Router configuration
 │   │   │   └── index.js          # Route definitions
 │   │   ├── views/                # Page components
@@ -513,9 +822,8 @@ epifania/
 ├── logs/                         # Root-level logs
 ├── history_docs/                 # Project documentation
 ├── launcher.py                   # Unified application launcher
-├── start.sh                      # Linux/macOS startup script
-├── setup.sh                      # Linux/macOS setup script
-├── setup.bat                     # Windows setup script
+├── start.sh                      # Linux startup script
+├── setup.sh                      # Linux setup script
 ├── README.md                     # Project documentation
 ├── DEVELOPMENT_RULES.md          # Development guidelines
 └── LICENSE                       # License information
@@ -533,6 +841,9 @@ The backend follows a modular architecture with clear separation of concerns:
 - `backend/core/installer.py`: Complete Frida server installation, version management, and lifecycle control
 - `backend/core/log_streamer.py`: Real-time log streaming with WebSocket support and buffer management
 - `backend/core/logger.py`: Centralized logging with categorized output and rotating file handlers
+- `backend/core/diagnostics.py`: Comprehensive ADB diagnostics with multiple test suites
+- `backend/monitoring/health_manager.py`: Health monitoring system with periodic checks
+- `backend/monitoring/process_manager.py`: Process cleanup and PID file management
 - `backend/routers/`: API route handlers (reserved for future modularization)
 
 ### Logging Structure
@@ -543,6 +854,8 @@ Logs are organized into categorized directories:
 - `logs/backend/`: Backend application logs
   - `backend.log`: General backend operations
   - `error.log`: Error-level logs only
+  - `health_monitor.log`: Health check logs
+  - `backend.pid`: Process ID file
 - `logs/device/`: Device management and ADB operations
   - `device.log`: Device enumeration and communication
 - `logs/server/`: Server process logs
@@ -566,6 +879,11 @@ The frontend uses Vue 3 Composition API with a modern, security-focused design:
 **Components:**
 - `frontend/src/components/DeviceCard.vue`: Reusable device card with status indicators and actions
 - `frontend/src/components/LogViewer.vue`: Real-time log streaming with WebSocket integration and auto-start capabilities
+- `frontend/src/components/ToastNotification.vue`: Toast notification display system
+
+**Composables:**
+- `frontend/src/composables/useApiConnection.js`: Backend connection management with auto-reconnect
+- `frontend/src/composables/useToast.js`: Toast notification state management
 
 **Design Features:**
 - Pure black background (#000000) with subtle transparency layers
@@ -587,7 +905,7 @@ All Python dependencies are isolated in `backend/venv/`. To update:
 
 ```bash
 cd backend
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install --upgrade <package-name>
 pip freeze > requirements.txt
 deactivate
@@ -621,7 +939,7 @@ npm install
 Backend only:
 ```bash
 cd backend
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -639,17 +957,25 @@ npm run dev
 - Ensure ADB is installed and available in PATH
 - Check that ADB server is running: `adb devices`
 - Verify USB debugging is enabled on target devices
+- Try restarting ADB via the UI or: `adb kill-server && adb start-server`
 
 **Frida Installation Fails:**
 - Verify device has sufficient storage space
 - Check that device has root access (for system-level installation)
 - Ensure correct architecture is selected
 - Try manually pushing the binary via ADB
+- Use the diagnostics tool to identify permission issues
 
 **WebSocket Connection Fails:**
 - Check that backend is running on port 8000
 - Verify no firewall is blocking WebSocket connections
 - Check browser console for connection errors
+- Backend will auto-reconnect with exponential backoff
+
+**Health Checks Failing:**
+- Check logs in `logs/backend/health_monitor.log`
+- Verify ADB server is running
+- Ensure no port conflicts on 8000
 
 ### Frontend Issues
 
@@ -657,16 +983,33 @@ npm run dev
 - Click "Scan Devices" to trigger device enumeration
 - Verify backend is running and accessible
 - Check browser console for API errors
+- Use the ADB restart button if connection is lost
 
 **Logs Not Streaming:**
 - Verify WebSocket connection is established
 - Check that device is still connected
 - Try manually starting the log stream with the play button
+- Check browser console for WebSocket errors
 
 **Page Not Loading:**
 - Clear browser cache and reload
 - Check that frontend dev server is running on port 5173
 - Verify no port conflicts with other applications
+- Check if backend is accessible (connection indicator in header)
+
+**Backend Connection Lost:**
+- The UI will automatically attempt to reconnect with exponential backoff
+- Check that backend service is running
+- Verify no firewall blocking localhost:8000
+- Toast notifications will inform you of connection status
+
+### Diagnostics
+
+**Using the Built-in Diagnostics:**
+- Navigate to device details page
+- Click "Run Tests" in the ADB Diagnostics section
+- Review test results for specific issues
+- Follow recommendations provided in test details
 
 ## Security Considerations
 
@@ -695,8 +1038,8 @@ npm run dev
 - Review Frida scripts before injection (when feature is implemented)
 - Monitor logs for unexpected ADB operations
 - Keep ADB and Frida versions up to date
+- Use diagnostics tool to verify device security settings
 
 ## License
 
 This project is intended for security research and educational purposes.
-
