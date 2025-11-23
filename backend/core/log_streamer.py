@@ -132,6 +132,29 @@ class LogStreamer:
             return "debug"
         return "info"
     
+    def _should_filter_logcat_line(self, line: str, level: str) -> bool:
+        # Filter out debug logs from less important system components
+        if level == "debug":
+            # Common noisy tags to filter out
+            noisy_tags = [
+                "InputReader", "InputDispatcher", "WindowManager",
+                "ActivityManager", "KeyguardUpdateMonitor", "PowerManagerService",
+                "WifiService", "ConnectivityService", "ViewRootImpl"
+            ]
+            for tag in noisy_tags:
+                if tag in line:
+                    return True
+        
+        # Always keep errors and warnings
+        if level in ["error", "warning"]:
+            return False
+        
+        # Filter out very verbose system messages
+        if "system_process" in line.lower() and level == "debug":
+            return True
+        
+        return False
+    
     def fetch_logcat_history(self, device_id: str, adb_manager, max_lines: int = 500):
         try:
             device = adb_manager.get_device(device_id)
@@ -140,9 +163,10 @@ class LogStreamer:
                 return
             
             # Try to get last N lines using -t, fallback to full dump
-            history = device.shell(f"logcat -d -v time -b all -t {max_lines}")
+            # Use main buffer only for better performance, focus on application logs
+            history = device.shell(f"logcat -d -v time -b main -t {max_lines}")
             if not history or "unknown option" in history.lower():
-                history = device.shell("logcat -d -v time -b all")
+                history = device.shell("logcat -d -v time -b main")
                 if history:
                     lines = history.splitlines()[-max_lines:]
                 else:
@@ -155,6 +179,9 @@ class LogStreamer:
                 if not line:
                     continue
                 level = self._parse_level_from_logcat(line)
+                # Apply smart filtering
+                if self._should_filter_logcat_line(line, level):
+                    continue
                 self.add_log(device_id, "logcat", line, level)
         except Exception as e:
             logger.error(f"Failed to fetch logcat history for {device_id}: {str(e)}")
@@ -165,9 +192,13 @@ class LogStreamer:
             self.set_streaming(device_id, "logcat", True)
             
             # Start logcat in a separate thread using adb subprocess for reliable streaming
+            # Focus on main buffer and important logs only
             def read_logcat():
+                process = None
                 try:
-                    cmd = ["adb", "-s", device_id, "logcat", "-v", "time", "-b", "all"]
+                    # Use main buffer, filter by priority (V=Verbose, D=Debug, I=Info, W=Warning, E=Error, F=Fatal)
+                    # *:I means show Info and above for all tags
+                    cmd = ["adb", "-s", device_id, "logcat", "-v", "time", "-b", "main", "*:I"]
                     process = subprocess.Popen(
                         cmd,
                         stdout=subprocess.PIPE,
@@ -180,7 +211,9 @@ class LogStreamer:
                     self.stream_processes[device_id]["logcat"] = process
                     
                     for line in iter(process.stdout.readline, ''):
+                        # Check if streaming should stop
                         if not self.is_streaming(device_id, "logcat"):
+                            logger.info(f"Logcat stream stopped for device {device_id}")
                             break
                         if not line:
                             continue
@@ -188,16 +221,23 @@ class LogStreamer:
                         if not line:
                             continue
                         level = self._parse_level_from_logcat(line)
+                        # Apply smart filtering
+                        if self._should_filter_logcat_line(line, level):
+                            continue
                         self.add_log(device_id, "logcat", line, level)
                 except Exception as e:
                     logger.error(f"Error in logcat stream: {str(e)}")
                 finally:
-                    try:
-                        proc = self.stream_processes.get(device_id, {}).get("logcat")
-                        if proc and proc.poll() is None:
-                            proc.terminate()
-                    except Exception:
-                        pass
+                    # Ensure process is terminated
+                    if process and process.poll() is None:
+                        try:
+                            process.terminate()
+                            process.wait(timeout=2)
+                        except Exception:
+                            try:
+                                process.kill()
+                            except Exception:
+                                pass
             
             thread = threading.Thread(target=read_logcat, daemon=True)
             thread.start()
@@ -215,12 +255,22 @@ class LogStreamer:
             if not task.done():
                 task.cancel()
         
+        # Terminate the process more aggressively
         try:
             proc = self.stream_processes.get(device_id, {}).get(log_type)
             if proc and proc.poll() is None:
                 proc.terminate()
-        except Exception:
-            pass
+                try:
+                    proc.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    # Force kill if terminate didn't work
+                    proc.kill()
+                    try:
+                        proc.wait(timeout=1)
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.error(f"Error stopping {log_type} process: {str(e)}")
 
 
 log_streamer = LogStreamer()
