@@ -23,6 +23,7 @@ LOG_VITE = LOGS_SERVICES / "vite.log"
 
 # Diagnostics logs
 LOGS_FRIDA_ACTIVATION = LOGS_DIAGNOSTICS / "frida" / "activation"
+LOGS_FRIDA_SERVER = LOGS_DIAGNOSTICS / "frida" / "server"
 
 
 def ensure_log_directories():
@@ -31,4 +32,5 @@ def ensure_log_directories():
     LOGS_DIAGNOSTICS.mkdir(parents=True, exist_ok=True)
     LOGS_SERVICES.mkdir(parents=True, exist_ok=True)
     LOGS_FRIDA_ACTIVATION.mkdir(parents=True, exist_ok=True)
+    LOGS_FRIDA_SERVER.mkdir(parents=True, exist_ok=True)
 

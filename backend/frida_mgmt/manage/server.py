@@ -1,4 +1,5 @@
 import time
+import subprocess
 from typing import Optional
 from core.logger import get_logger
 from utils.frida_debug import FridaDebugLogger
@@ -233,35 +234,53 @@ class FridaServerManager:
             if not is_emulator:
                 debug_logger.add_startup_info("Device Type: Physical")
             
-            # Try to start with root privileges first, fallback to non-root
-            start_command_root = f"su -c 'nohup {server_path} > /dev/null 2>&1 &'"
-            start_command_nonroot = f"nohup {server_path} > /dev/null 2>&1 &"
-            
-            try:
-                result = device.shell(start_command_root)
-                logger.debug(f"Attempted to start Frida server with root: {result}")
-                if LOG_STREAMER_AVAILABLE:
-                    log_streamer.add_log(device_serial, "frida_server", "Tried start with root privileges", "info")
-                    log_streamer.add_log(device_serial, "adb_operations", f"shell: {start_command_root}", "info")
-                debug_logger.add_adb_operation(start_command_root, result if result else "No output")
-                debug_logger.add_startup_info("Startup Attempt: With root privileges")
-            except Exception as e:
-                logger.debug(f"Root start failed: {str(e)}, trying without root")
-                if LOG_STREAMER_AVAILABLE:
-                    log_streamer.add_log(device_serial, "frida_server", "Root start failed, trying without root", "warning")
-                debug_logger.add_startup_info(f"Root start failed: {str(e)}")
+            # Select root strategy based on actual access
+            has_root = self.adb_manager.check_root_access(device)
+            debug_logger.add_startup_info(f"Root Access (runtime): {'Yes' if has_root else 'No'}")
+
+            # Use subprocess to start frida-server instead of ppadb's shell()
+            # ppadb's device.shell() has issues with backgrounding processes
+            start_command_root = f"su -c 'nohup {server_path} > /data/local/tmp/frida-server.log 2>&1 &'"
+            start_command_nonroot = f"nohup {server_path} > /data/local/tmp/frida-server.log 2>&1 &"
+
+            started_with_root = False
+
+            if has_root:
                 try:
-                    result = device.shell(start_command_nonroot)
-                    logger.debug(f"Attempted to start Frida server without root: {result}")
+                    # Use subprocess.Popen to properly background the process
+                    cmd = ['adb', '-s', device_serial, 'shell', start_command_root]
+                    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    started_with_root = True
+                    logger.debug(f"Attempted to start Frida server with root via subprocess")
+                    if LOG_STREAMER_AVAILABLE:
+                        log_streamer.add_log(device_serial, "frida_server", "Tried start with root privileges", "info")
+                        log_streamer.add_log(device_serial, "adb_operations", f"shell: {start_command_root}", "info")
+                    debug_logger.add_adb_operation(start_command_root, "Started via subprocess")
+                    debug_logger.add_startup_info("Startup Attempt: With root privileges (via subprocess)")
+                except Exception as e:
+                    logger.debug(f"Root start failed: {str(e)}, will try without root")
+                    if LOG_STREAMER_AVAILABLE:
+                        log_streamer.add_log(device_serial, "frida_server", "Root start failed, trying without root", "warning")
+                    debug_logger.add_startup_info(f"Root start failed: {str(e)}")
+
+            # Give the root attempt a moment to spawn the process
+            time.sleep(2)
+
+            # If root either was not used or did not result in a running server, try non-root as fallback
+            if not has_root or not self.is_frida_server_running(device_serial):
+                try:
+                    # Use subprocess.Popen for non-root as well
+                    cmd = ['adb', '-s', device_serial, 'shell', start_command_nonroot]
+                    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    logger.debug(f"Attempted to start Frida server without root via subprocess")
                     if LOG_STREAMER_AVAILABLE:
                         log_streamer.add_log(device_serial, "adb_operations", f"shell: {start_command_nonroot}", "info")
-                    debug_logger.add_adb_operation(start_command_nonroot, result if result else "No output")
-                    debug_logger.add_startup_info("Startup Attempt: Without root privileges")
+                    debug_logger.add_adb_operation(start_command_nonroot, "Started via subprocess")
+                    debug_logger.add_startup_info("Startup Attempt: Without root privileges (via subprocess)")
+                    time.sleep(2)
                 except Exception as e2:
-                    logger.error(f"Non-root start also failed: {str(e2)}")
+                    logger.error(f"Non-root start failed: {str(e2)}")
                     debug_logger.add_startup_info(f"Non-root start failed: {str(e2)}")
-            
-            time.sleep(2)
             
             # Check if process is running
             pidof_result = device.shell("pidof frida-server")
