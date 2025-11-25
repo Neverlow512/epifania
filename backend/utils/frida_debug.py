@@ -2,6 +2,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
 from core.logger import get_logger
+from core.log_paths import LOGS_FRIDA_ACTIVATION
 
 logger = get_logger(__name__, "backend")
 
@@ -12,8 +13,8 @@ class FridaDebugLogger:
         self.device_info = device_info or {}
         self.timestamp = datetime.now()
         
-        # Debug log directory
-        self.debug_dir = Path(__file__).parent.parent.parent / "logs" / "errors" / "frida-server" / "activation"
+        # Ensure debug log directory exists
+        self.debug_dir = LOGS_FRIDA_ACTIVATION
         self.debug_dir.mkdir(parents=True, exist_ok=True)
         
         # Debug file path

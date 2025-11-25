@@ -5,6 +5,7 @@ import socket
 from pathlib import Path
 from typing import Optional
 from core.logger import get_logger
+from core.log_paths import LOGS_APPLICATION
 
 logger = get_logger(__name__, "backend")
 
@@ -12,7 +13,7 @@ logger = get_logger(__name__, "backend")
 class ProcessManager:
     def __init__(self, port: int = 8000, pid_file: Optional[str] = None):
         self.port = port
-        self.pid_file = pid_file or str(Path(__file__).parent.parent.parent / "logs" / "backend" / "backend.pid")
+        self.pid_file = pid_file or str(LOGS_APPLICATION / "backend.pid")
         self.current_pid = os.getpid()
         
         logger.info(f"Process manager initialized for port {self.port}")

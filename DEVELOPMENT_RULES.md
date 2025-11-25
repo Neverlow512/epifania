@@ -14,6 +14,12 @@
 - DO comment complex algorithms or non-obvious logic
 - Keep comments short and technical
 
+## Shell Scripts
+
+1. **Avoid New Shell Scripts**: Do not create new shell scripts unless absolutely necessary
+2. **Existing Scripts**: Root-level shell scripts (`setup.sh`, `start.sh`, `launcher.py`) are acceptable as they provide user convenience
+3. **Integrate Features**: Functionality should be integrated into the main application rather than added as standalone shell scripts
+
 ## Security Standards
 
 1. **Input Validation**: Always validate and sanitize external inputs

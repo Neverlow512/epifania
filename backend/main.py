@@ -533,6 +533,8 @@ async def websocket_logs(websocket: WebSocket, device_id: str):
                         device_manager.adb_manager,
                         loop
                     ))
+                elif log_type == "frida_server":
+                    asyncio.create_task(log_streamer.stream_frida_server(device_id))
                 
             elif action == "stop" and log_type:
                 logger.info(f"Stopping {log_type} stream for device {device_id}")

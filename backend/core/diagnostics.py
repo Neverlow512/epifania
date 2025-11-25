@@ -71,13 +71,7 @@ class DeviceDiagnostics:
         }
         
         try:
-            device = self.adb_manager.get_device(device_serial)
-            if not device:
-                test_result["message"] = "Device not found"
-                test_result["details"]["error"] = "Could not connect to device via ADB"
-                return test_result
-            
-            result = device.shell("echo 'connectivity_test'")
+            result = self.adb_manager.execute_shell(device_serial, "echo 'connectivity_test'")
             if result and "connectivity_test" in result:
                 test_result["status"] = "pass"
                 test_result["message"] = "Shell commands execute successfully"
@@ -106,12 +100,7 @@ class DeviceDiagnostics:
         }
         
         try:
-            device = self.adb_manager.get_device(device_serial)
-            if not device:
-                test_result["message"] = "Device not found"
-                return test_result
-            
-            result = device.shell("su -c 'id'")
+            result = self.adb_manager.execute_shell(device_serial, "su -c 'id'")
             if result and "uid=0" in result:
                 test_result["status"] = "pass"
                 test_result["message"] = "Root access is available"
@@ -142,15 +131,10 @@ class DeviceDiagnostics:
         }
         
         try:
-            device = self.adb_manager.get_device(device_serial)
-            if not device:
-                test_result["message"] = "Device not found"
-                return test_result
-            
             test_file = "/data/local/tmp/.epifania_write_test"
             
             # Try to write a test file
-            result = device.shell(f"echo 'test' > {test_file} && cat {test_file} && rm {test_file}")
+            result = self.adb_manager.execute_shell(device_serial, f"echo 'test' > {test_file} && cat {test_file} && rm {test_file}")
             
             if result and "test" in result:
                 test_result["status"] = "pass"
@@ -180,13 +164,7 @@ class DeviceDiagnostics:
         }
         
         try:
-            device = self.adb_manager.get_device(device_serial)
-            if not device:
-                test_result["message"] = "Device not found"
-                test_result["status"] = "fail"
-                return test_result
-            
-            result = device.shell("getenforce")
+            result = self.adb_manager.execute_shell(device_serial, "getenforce")
             if result:
                 mode = result.strip()
                 test_result["details"]["mode"] = mode
@@ -226,12 +204,7 @@ class DeviceDiagnostics:
         }
         
         try:
-            device = self.adb_manager.get_device(device_serial)
-            if not device:
-                test_result["message"] = "Device not found"
-                return test_result
-            
-            result = device.shell("df /data | tail -1")
+            result = self.adb_manager.execute_shell(device_serial, "df /data | tail -1")
             if result:
                 parts = result.split()
                 if len(parts) >= 4:
@@ -293,14 +266,22 @@ class DeviceDiagnostics:
         }
         
         try:
-            if self.adb_manager.client:
-                version = self.adb_manager.client.version()
-                test_result["details"]["server_version"] = version
-                test_result["message"] = f"ADB server version: {version}"
+            # Use subprocess to get adb version
+            import subprocess
+            result = subprocess.run(
+                ['adb', 'version'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                version_info = result.stdout.strip().split('\n')[0]
+                test_result["details"]["version"] = version_info
+                test_result["message"] = f"ADB version: {version_info}"
                 test_result["status"] = "pass"
             else:
-                test_result["status"] = "fail"
-                test_result["message"] = "ADB client not connected"
+                test_result["status"] = "warning"
+                test_result["message"] = "Could not determine ADB version"
                 
         except Exception as e:
             test_result["status"] = "warning"

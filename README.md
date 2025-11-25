@@ -9,13 +9,13 @@ A GUI-based Dynamic Instrumentation Platform wrapping Frida and ADB for security
 **Implemented Features:**
 - ✅ Full ADB integration for accurate Android device detection
 - ✅ Backend API with FastAPI serving comprehensive device information
-- ✅ Professional security tool UI with refined dark theme (#7100d0 primary color)
+- ✅ Security tool interface with dark theme (#7100d0 primary color)
 - ✅ Device enumeration with detailed specifications (brand, model, Android version, architecture, root status)
 - ✅ Frida availability detection per device
 - ✅ Real-time ADB connection status monitoring
 - ✅ Interactive UI with button feedback, focus states, and disabled state handling
 - ✅ Responsive device cards with hover effects and status indicators
-- ✅ Comprehensive logging system with categorized log directories
+- ✅ Centralized logging system with categorized directories and automatic Frida failure diagnostics
 - ✅ Virtual environment setup for Python and Node.js dependency isolation
 - ✅ Automated startup scripts for development environment
 - ✅ Frida server installation, management, and version control
@@ -59,18 +59,15 @@ The backend serves as the orchestration layer, managing device connections and F
 
 ### Frontend (Vue.js/Vite)
 
-The frontend provides a professional, modern dashboard designed for security researchers with a refined dark theme centered around the Epifania brand color (#7100d0) and black backgrounds.
+The frontend provides a web-based dashboard for managing devices and Frida operations. It handles real-time communication with the backend via REST API and WebSocket connections.
 
 - **Vue 3**: Progressive JavaScript framework with Composition API
 - **Vue Router**: Client-side routing for multi-page navigation
 - **Vite**: Fast build tool and development server
-- **Tailwind CSS**: Utility-first CSS framework with custom security-focused design
-- **DaisyUI**: Component library with custom Epifania dark theme
+- **Tailwind CSS**: Utility-first CSS framework for styling
+- **DaisyUI**: Component library with dark theme configuration
 - **Axios**: HTTP client for API communication
 - **WebSocket**: Real-time bidirectional communication for log streaming
-- **Modern Typography**: Space Grotesk display font for brand identity
-- **Interactive Feedback**: Button states with focus rings, press animations, and disabled states
-- **Toast Notifications**: Rich notification system with success, error, warning, and info types
 - **Auto-Reconnect**: Automatic backend reconnection with exponential backoff strategy
 
 ## Prerequisites
@@ -751,10 +748,10 @@ Real-time bidirectional WebSocket connection for log streaming.
 - **Dashboard View**: Grid layout of device cards with quick actions
 - **Device Details View**: Comprehensive management interface for individual devices
 - **Responsive Design**: Adapts to different screen sizes and resolutions
-- **Visual Feedback**: Loading states, status badges, and interactive animations
-- **Professional Theme**: Security-focused dark theme with purple accent color
-- **Navigation**: Client-side routing with smooth page transitions
-- **Toast Notifications**: Rich notification system with success, error, warning, and info types
+- **Visual Feedback**: Loading states, status badges, and interactive elements
+- **Dark Theme**: Security-focused interface with purple accent color (#7100d0)
+- **Navigation**: Client-side routing with page transitions
+- **Toast Notifications**: Notification system with success, error, warning, and info types
 - **Auto-Reconnect**: Automatic backend reconnection with exponential backoff strategy
 - **Custom Frida Download**: Download specific Frida versions from UI dropdown menu
 
@@ -786,11 +783,7 @@ epifania/
 │   ├── frida_servers/            # Cached Frida server binaries
 │   │   └── {version}/            # Version-specific directories
 │   │       └── {arch}/           # Architecture-specific binaries
-│   ├── logs/                     # Application logs
-│   │   ├── backend/              # Backend logs
-│   │   ├── device/               # Device operation logs
-│   │   ├── server/               # Server process logs
-│   │   └── central.log           # Aggregated logs
+│   ├── logs/                     # Application logs (not in backend/)
 │   ├── routers/                  # API route modules (future)
 │   ├── venv/                     # Python virtual environment
 │   ├── main.py                   # FastAPI application entry
@@ -819,7 +812,22 @@ epifania/
 │   ├── vite.config.js            # Vite configuration
 │   └── postcss.config.js         # PostCSS configuration
 │
-├── logs/                         # Root-level logs
+├── logs/                         # Centralized logging system
+│   ├── application/              # Backend application logs
+│   │   ├── central.log
+│   │   ├── backend.log
+│   │   ├── errors.log
+│   │   └── backend.pid
+│   ├── devices/                  # Device operation logs
+│   │   └── device.log
+│   ├── diagnostics/              # Diagnostic logs
+│   │   └── frida/
+│   │       └── activation/       # Frida server startup diagnostics
+│   └── services/                 # Service process logs
+│       ├── uvicorn.log
+│       └── vite.log
+├── tests/                        # Test suite
+│   └── test_logging_system.py   # Logging system validation
 ├── history_docs/                 # Project documentation
 ├── launcher.py                   # Unified application launcher
 ├── start.sh                      # Linux startup script
@@ -848,33 +856,42 @@ The backend follows a modular architecture with clear separation of concerns:
 
 ### Logging Structure
 
-Logs are organized into categorized directories:
+The application uses a centralized logging system configured via `backend/core/log_paths.py`. All log directories are created automatically on startup via `ensure_log_directories()`.
 
-- `logs/central.log`: Aggregated log of all important events
-- `logs/backend/`: Backend application logs
-  - `backend.log`: General backend operations
-  - `error.log`: Error-level logs only
-  - `health_monitor.log`: Health check logs
-  - `backend.pid`: Process ID file
-- `logs/device/`: Device management and ADB operations
-  - `device.log`: Device enumeration and communication
-- `logs/server/`: Server process logs
-  - `uvicorn.log`: FastAPI server output
-  - `vite.log`: Vite dev server output
+**Log Directory Structure:**
+
+- `logs/application/` - Backend application logs
+  - `central.log` - Aggregated log of all important events
+  - `backend.log` - General backend operations
+  - `errors.log` - Error-level logs only
+  - `backend.pid` - Process ID file for backend tracking
+- `logs/devices/` - Device management and ADB operations
+  - `device.log` - Device enumeration and communication logs
+- `logs/diagnostics/` - Diagnostic and troubleshooting logs
+  - `frida/activation/` - Frida server startup diagnostics (includes failure logs with detailed device info, permissions, and ADB operations)
+- `logs/services/` - External service logs
+  - `uvicorn.log` - FastAPI server output
+  - `vite.log` - Vite dev server output
+
+**Key Features:**
+- Centralized path configuration prevents inconsistencies
+- Rotating file handlers prevent unbounded log growth
+- Frida server failures automatically generate detailed diagnostic logs in `diagnostics/frida/activation/`
+- All components reference the same log path constants
 
 ### Frontend Development
 
-The frontend uses Vue 3 Composition API with a modern, security-focused design:
+The frontend uses Vue 3 Composition API with a component-based architecture:
 
 **Application Structure:**
 - `frontend/src/App.vue`: Root component with navigation header and global state
 - `frontend/src/main.js`: Application entry point with router integration
 - `frontend/src/router/index.js`: Vue Router configuration for multi-page navigation
-- `frontend/src/style.css`: Custom Epifania dark theme with DaisyUI integration
+- `frontend/src/style.css`: Global styles and theme configuration
 
 **Views:**
 - `frontend/src/views/Dashboard.vue`: Device list with auto-refresh and scanning capabilities
-- `frontend/src/views/DeviceDetails.vue`: Comprehensive device management interface with Frida controls
+- `frontend/src/views/DeviceDetails.vue`: Device management interface with Frida controls and log streaming
 
 **Components:**
 - `frontend/src/components/DeviceCard.vue`: Reusable device card with status indicators and actions
@@ -885,15 +902,12 @@ The frontend uses Vue 3 Composition API with a modern, security-focused design:
 - `frontend/src/composables/useApiConnection.js`: Backend connection management with auto-reconnect
 - `frontend/src/composables/useToast.js`: Toast notification state management
 
-**Design Features:**
-- Pure black background (#000000) with subtle transparency layers
-- Primary brand color (#7100d0) used consistently across interactive elements
-- Space Grotesk display font for brand identity (all-caps, tight letter spacing)
-- Interactive button states with press animations and focus rings
-- Glassmorphism effects with backdrop blur on cards and panels
-- Animated status indicators with pulse effects
-- Responsive grid layout adapting to screen sizes
-- Professional device cards with comprehensive information display
+**Technical Implementation:**
+- Vue 3 Composition API for reactive state management
+- WebSocket integration for real-time log streaming
+- Automatic reconnection with exponential backoff for backend connectivity
+- Client-side routing with Vue Router
+- Tailwind CSS with DaisyUI components for consistent styling
 - Auto-streaming logs for debugging (Frida Install, Frida Server, ADB Operations)
 - Manual-start logcat streaming for performance optimization
 
@@ -948,6 +962,24 @@ Frontend only:
 cd frontend
 npm run dev
 ```
+
+### Testing
+
+The project includes a test suite for validating the centralized logging system.
+
+**Run Logging System Tests:**
+```bash
+python3 tests/test_logging_system.py
+```
+
+This test validates:
+- Log path configuration and directory creation
+- Logger initialization and file writes
+- FridaDebugLogger diagnostic file generation
+- Log file structure and organization
+- Migration from old log directory structure
+
+The test suite provides comprehensive validation that all logging components correctly use the centralized configuration and write to the appropriate directories.
 
 ## Troubleshooting
 

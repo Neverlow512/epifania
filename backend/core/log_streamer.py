@@ -5,6 +5,7 @@ from collections import deque
 from typing import Dict, List, Optional, Callable, Tuple
 from datetime import datetime
 from core.logger import get_logger
+from core.log_paths import LOGS_FRIDA_SERVER
 
 logger = get_logger(__name__, "backend")
 
@@ -185,7 +186,102 @@ class LogStreamer:
                 self.add_log(device_id, "logcat", line, level)
         except Exception as e:
             logger.error(f"Failed to fetch logcat history for {device_id}: {str(e)}")
-    
+
+    def _stream_process_lines(self, device_id: str, log_type: str, process: subprocess.Popen, local_log_path: Optional[str] = None):
+        log_file = None
+        try:
+            if local_log_path is not None:
+                try:
+                    LOGS_FRIDA_SERVER.mkdir(parents=True, exist_ok=True)
+                    log_file = open(local_log_path, "a", encoding="utf-8", errors="ignore")
+                except Exception as e:
+                    logger.error(f"Failed to open local log file {local_log_path}: {str(e)}")
+                    log_file = None
+
+            for line in iter(process.stdout.readline, ""):
+                if not self.is_streaming(device_id, log_type):
+                    logger.info(f"{log_type} stream stopped for device {device_id}")
+                    break
+                if not line:
+                    continue
+                line = line.rstrip("\n")
+                if not line:
+                    continue
+
+                level = "info"
+                if log_type == "logcat":
+                    level = self._parse_level_from_logcat(line)
+                    if self._should_filter_logcat_line(line, level):
+                        continue
+
+                self.add_log(device_id, log_type, line, level)
+
+                if log_file is not None:
+                    try:
+                        log_file.write(line + "\n")
+                        log_file.flush()
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.error(f"Error in {log_type} stream for {device_id}: {str(e)}")
+        finally:
+            if process and process.poll() is None:
+                try:
+                    process.terminate()
+                    process.wait(timeout=2)
+                except Exception:
+                    try:
+                        process.kill()
+                    except Exception:
+                        pass
+            if log_file is not None:
+                try:
+                    log_file.close()
+                except Exception:
+                    pass
+
+    async def stream_frida_server(self, device_id: str):
+        try:
+            logger.info(f"Starting Frida server output stream for device {device_id}")
+            self.set_streaming(device_id, "frida_server", True)
+
+            def read_frida_output():
+                process = None
+                try:
+                    cmd = ["adb", "-s", device_id, "shell", "tail", "-n", "200", "-f", "/data/local/tmp/frida-server.log"]
+                    process = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        bufsize=1,
+                        universal_newlines=True
+                    )
+                    if device_id not in self.stream_processes:
+                        self.stream_processes[device_id] = {}
+                    self.stream_processes[device_id]["frida_server"] = process
+
+                    local_log_path = str((LOGS_FRIDA_SERVER / f"{device_id.replace(':', '_')}.log"))
+                    self._stream_process_lines(device_id, "frida_server", process, local_log_path)
+                except Exception as e:
+                    logger.error(f"Failed to start Frida server output stream for {device_id}: {str(e)}")
+                finally:
+                    if process and process.poll() is None:
+                        try:
+                            process.terminate()
+                            process.wait(timeout=2)
+                        except Exception:
+                            try:
+                                process.kill()
+                            except Exception:
+                                pass
+
+            thread = threading.Thread(target=read_frida_output, daemon=True)
+            thread.start()
+
+        except Exception as e:
+            logger.error(f"Failed to start Frida server stream: {str(e)}")
+            self.set_streaming(device_id, "frida_server", False)
+
     async def stream_logcat(self, device_id: str, adb_manager, loop: asyncio.AbstractEventLoop):
         try:
             logger.info(f"Starting logcat stream for device {device_id}")
@@ -209,35 +305,9 @@ class LogStreamer:
                     if device_id not in self.stream_processes:
                         self.stream_processes[device_id] = {}
                     self.stream_processes[device_id]["logcat"] = process
-                    
-                    for line in iter(process.stdout.readline, ''):
-                        # Check if streaming should stop
-                        if not self.is_streaming(device_id, "logcat"):
-                            logger.info(f"Logcat stream stopped for device {device_id}")
-                            break
-                        if not line:
-                            continue
-                        line = line.strip()
-                        if not line:
-                            continue
-                        level = self._parse_level_from_logcat(line)
-                        # Apply smart filtering
-                        if self._should_filter_logcat_line(line, level):
-                            continue
-                        self.add_log(device_id, "logcat", line, level)
+                    self._stream_process_lines(device_id, "logcat", process)
                 except Exception as e:
                     logger.error(f"Error in logcat stream: {str(e)}")
-                finally:
-                    # Ensure process is terminated
-                    if process and process.poll() is None:
-                        try:
-                            process.terminate()
-                            process.wait(timeout=2)
-                        except Exception:
-                            try:
-                                process.kill()
-                            except Exception:
-                                pass
             
             thread = threading.Thread(target=read_logcat, daemon=True)
             thread.start()

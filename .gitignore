@@ -90,3 +90,4 @@ htmlcov/
 # Project-specific
 history_docs/
 backend/frida_servers/
+tests/
