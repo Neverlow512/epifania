@@ -2,27 +2,23 @@ import logging
 import sys
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
+from core.log_paths import (
+    ensure_log_directories,
+    LOG_CENTRAL,
+    LOG_BACKEND,
+    LOG_DEVICES,
+    LOG_ERRORS
+)
 
 
 class EpifaniaLogger:
-    def __init__(self, log_dir: str = "logs"):
-        project_root = Path(__file__).parent.parent.parent
-        self.log_dir = project_root / log_dir
-        self.log_dir.mkdir(exist_ok=True)
+    def __init__(self):
+        ensure_log_directories()
         
-        self.backend_dir = self.log_dir / "backend"
-        self.backend_dir.mkdir(exist_ok=True)
-        
-        self.device_dir = self.log_dir / "device"
-        self.device_dir.mkdir(exist_ok=True)
-        
-        self.server_dir = self.log_dir / "server"
-        self.server_dir.mkdir(exist_ok=True)
-        
-        self.central_log = self.log_dir / "central.log"
-        self.backend_log = self.backend_dir / "backend.log"
-        self.device_log = self.device_dir / "device.log"
-        self.error_log = self.backend_dir / "error.log"
+        self.central_log = LOG_CENTRAL
+        self.backend_log = LOG_BACKEND
+        self.device_log = LOG_DEVICES
+        self.error_log = LOG_ERRORS
         
         self._setup_loggers()
     
