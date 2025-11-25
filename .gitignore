@@ -54,12 +54,8 @@ Desktop.ini
 
 # Logs
 *.log
-logs/*.log
-logs/**/*.log
-logs/backend/
-logs/device/
-logs/server/
-!logs/.gitkeep
+*.pid
+logs/
 
 # Testing
 .coverage
