@@ -7,7 +7,8 @@ A GUI-based Dynamic Instrumentation Platform wrapping Frida and ADB for security
 **Current Stage:** Active Development
 
 **Implemented Features:**
-- ✅ Full ADB integration for accurate Android device detection
+- ✅ Native ADB integration for reliable Android device detection and communication
+- ✅ Full Frida server lifecycle management with operational start/stop/restart controls
 - ✅ Backend API with FastAPI serving comprehensive device information
 - ✅ Security tool interface with dark theme (#7100d0 primary color)
 - ✅ Device enumeration with detailed specifications (brand, model, Android version, architecture, root status)
@@ -50,11 +51,11 @@ Epifania is a local web-based tool designed for security analysis and dynamic in
 
 ### Backend (Python/FastAPI)
 
-The backend serves as the orchestration layer, managing device connections and Frida instrumentation. It provides a RESTful API for frontend communication with full ADB integration.
+The backend serves as the orchestration layer, managing device connections and Frida instrumentation. It provides a RESTful API for frontend communication with native ADB integration.
 
 - **FastAPI**: High-performance web framework for API endpoints
 - **Frida**: Dynamic instrumentation toolkit for runtime analysis
-- **pure-python-adb**: Full Android Debug Bridge integration for device management and communication
+- **Native ADB**: Direct Android Debug Bridge integration via subprocess for reliable device management and communication
 - **Modular Architecture**: Separate managers for ADB, devices, installation tasks, health monitoring, and diagnostics
 
 ### Frontend (Vue.js/Vite)
@@ -682,7 +683,7 @@ Real-time bidirectional WebSocket connection for log streaming.
 | Backend Runtime | Python | 3.8+ | Orchestration and business logic |
 | ASGI Server | Uvicorn | 0.38.0 | High-performance async server |
 | Instrumentation | Frida | 17.5.1 | Dynamic code injection and hooking |
-| Device Management | pure-python-adb | 0.3.0.dev0 | Android device communication |
+| Device Management | Native ADB | System | Android device communication via subprocess |
 | Data Validation | Pydantic | 2.12.4 | Request/response validation |
 | WebSocket | websockets | 13.1 | Real-time log streaming |
 | Process Management | psutil | 6.1.0 | System and process monitoring |
