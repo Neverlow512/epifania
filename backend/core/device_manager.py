@@ -78,15 +78,7 @@ class DeviceManager:
         try:
             logger.info(f"Verifying connection for device {device_serial}")
             
-            device = self.adb_manager.get_device(device_serial)
-            
-            if not device:
-                return {
-                    "connected": False,
-                    "message": "Device not found or not connected via ADB"
-                }
-            
-            result = device.shell("echo 'test'")
+            result = self.adb_manager.execute_shell(device_serial, "echo 'test'")
             
             if result and "test" in result:
                 logger.info(f"Device {device_serial} is connected and reachable")

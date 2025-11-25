@@ -209,26 +209,31 @@ class Installer:
             if LOG_STREAMER_AVAILABLE:
                 log_streamer.add_log(device_serial, "frida_install", f"Downloaded Frida server to {frida_binary}", "info")
             
-            device = self.adb_manager.get_device(device_serial)
-            if not device:
-                logger.error(f"Device {device_serial} not found")
-                if LOG_STREAMER_AVAILABLE:
-                    log_streamer.add_log(device_serial, "frida_install", f"Device {device_serial} not found", "error")
-                return False
+            # Verify device is available (adb_manager will validate)
+            # No need to get device object anymore
             
             logger.info(f"Pushing Frida server to device")
             if LOG_STREAMER_AVAILABLE:
                 log_streamer.add_log(device_serial, "frida_install", "Pushing Frida server to /data/local/tmp/frida-server", "info")
                 log_streamer.add_log(device_serial, "adb_operations", f"push {frida_binary} /data/local/tmp/frida-server", "info")
             
-            device.push(str(frida_binary), "/data/local/tmp/frida-server")
+            # Use adb_manager's push method instead of device.push
+            push_success = self.adb_manager.push_file(device_serial, str(frida_binary), "/data/local/tmp/frida-server")
+            if not push_success:
+                logger.error("Failed to push Frida server to device")
+                if LOG_STREAMER_AVAILABLE:
+                    log_streamer.add_log(device_serial, "frida_install", "Failed to push Frida server", "error")
+                return False
             
             logger.info(f"Setting executable permissions")
             if LOG_STREAMER_AVAILABLE:
                 log_streamer.add_log(device_serial, "frida_install", "Setting executable permissions", "info")
                 log_streamer.add_log(device_serial, "adb_operations", "shell: chmod 755 /data/local/tmp/frida-server", "info")
             
-            device.shell("chmod 755 /data/local/tmp/frida-server")
+            # Use adb_manager's execute_shell instead of device.shell
+            chmod_result = self.adb_manager.execute_shell(device_serial, "chmod 755 /data/local/tmp/frida-server")
+            if chmod_result is None:
+                logger.warning("chmod command may have failed, but continuing")
             
             logger.info(f"Successfully installed Frida server {version} on {device_serial}")
             if LOG_STREAMER_AVAILABLE:
@@ -254,13 +259,16 @@ class Installer:
             
             logger.info(f"Pushing cached Frida server {version} to {device_serial}")
             
-            device = self.adb_manager.get_device(device_serial)
-            if not device:
-                logger.error(f"Device {device_serial} not found")
+            # Use adb_manager's push method directly
+            push_success = self.adb_manager.push_file(device_serial, str(cache_path), "/data/local/tmp/frida-server")
+            if not push_success:
+                logger.error("Failed to push cached Frida server to device")
                 return False
             
-            device.push(str(cache_path), "/data/local/tmp/frida-server")
-            device.shell("chmod 755 /data/local/tmp/frida-server")
+            # Use adb_manager's execute_shell for chmod
+            chmod_result = self.adb_manager.execute_shell(device_serial, "chmod 755 /data/local/tmp/frida-server")
+            if chmod_result is None:
+                logger.warning("chmod command may have failed, but continuing")
             
             logger.info(f"Successfully pushed cached Frida server to {device_serial}")
             return True

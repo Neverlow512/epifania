@@ -23,12 +23,7 @@ class FridaPermissions:
                 logger.error("ADB manager not initialized")
                 return {"exists": False, "is_executable": False, "permissions": None}
             
-            device = self.adb_manager.get_device(device_serial)
-            if not device:
-                logger.error(f"Device {device_serial} not found")
-                return {"exists": False, "is_executable": False, "permissions": None}
-            
-            result = device.shell(f"ls -la {path} 2>/dev/null")
+            result = self.adb_manager.execute_shell(device_serial, f"ls -la {path} 2>/dev/null")
             
             if not result or "No such file" in result:
                 logger.info(f"File does not exist: {path}")
@@ -48,7 +43,7 @@ class FridaPermissions:
                 # Try to get SELinux context
                 selinux_context = None
                 try:
-                    selinux_result = device.shell(f"ls -Z {path} 2>/dev/null")
+                    selinux_result = self.adb_manager.execute_shell(device_serial, f"ls -Z {path} 2>/dev/null")
                     if selinux_result and "u:object_r:" in selinux_result:
                         selinux_parts = selinux_result.strip().split()
                         if len(selinux_parts) > 0:
@@ -90,13 +85,8 @@ class FridaPermissions:
             if LOG_STREAMER_AVAILABLE:
                 log_streamer.add_log(device_serial, "frida_install", f"Setting executable permissions for {path}", "info")
             
-            device = self.adb_manager.get_device(device_serial)
-            if not device:
-                logger.error(f"Device {device_serial} not found")
-                return {"success": False, "message": "Device not found"}
-            
             # Check if file exists first
-            check = device.shell(f"ls {path} 2>/dev/null")
+            check = self.adb_manager.execute_shell(device_serial, f"ls {path} 2>/dev/null")
             if not check or "No such file" in check:
                 message = f"File does not exist: {path}"
                 logger.warning(message)
@@ -112,7 +102,7 @@ class FridaPermissions:
             method_used = None
             
             try:
-                device.shell(f"su -c 'chmod 755 {path}'")
+                self.adb_manager.execute_shell(device_serial, f"su -c 'chmod 755 {path}'")
                 method_used = "root"
                 chmod_success = True
                 if LOG_STREAMER_AVAILABLE:
@@ -122,7 +112,7 @@ class FridaPermissions:
                 if LOG_STREAMER_AVAILABLE:
                     log_streamer.add_log(device_serial, "frida_debug", f"Root chmod failed: {str(e)}", "debug")
                 try:
-                    device.shell(f"chmod 755 {path}")
+                    self.adb_manager.execute_shell(device_serial, f"chmod 755 {path}")
                     method_used = "non-root"
                     chmod_success = True
                     if LOG_STREAMER_AVAILABLE:

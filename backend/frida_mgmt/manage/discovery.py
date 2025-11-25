@@ -27,11 +27,6 @@ class FridaDiscovery:
             if LOG_STREAMER_AVAILABLE:
                 log_streamer.add_log(device_serial, "frida_install", "Scanning device for Frida servers", "info")
             
-            device = self.adb_manager.get_device(device_serial)
-            if not device:
-                logger.error(f"Device {device_serial} not found")
-                return []
-            
             discovered_servers = []
             
             # Common locations to check (non-wildcard first)
@@ -46,7 +41,7 @@ class FridaDiscovery:
             for path in search_paths:
                 try:
                     # First check if file exists
-                    check_result = device.shell(f"test -f {path} && echo 'exists' || echo 'not_found'")
+                    check_result = self.adb_manager.execute_shell(device_serial, f"test -f {path} && echo 'exists' || echo 'not_found'")
                     
                     if not check_result or 'not_found' in check_result:
                         logger.debug(f"Path {path} does not exist")
@@ -55,7 +50,7 @@ class FridaDiscovery:
                     logger.info(f"Found file at {path}, getting details")
                     
                     # Get file details using ls -l
-                    ls_result = device.shell(f"ls -l {path}")
+                    ls_result = self.adb_manager.execute_shell(device_serial, f"ls -l {path}")
                     
                     if not ls_result or "No such file" in ls_result:
                         logger.warning(f"File exists but ls failed for {path}")
@@ -81,7 +76,7 @@ class FridaDiscovery:
                     # Try to get version
                     version = None
                     try:
-                        version_result = device.shell(f"{file_path} --version 2>/dev/null")
+                        version_result = self.adb_manager.execute_shell(device_serial, f"{file_path} --version 2>/dev/null")
                         if version_result and version_result.strip() and "not found" not in version_result.lower():
                             version = version_result.strip().split('\n')[0]
                             # Validate it looks like a version
@@ -132,11 +127,6 @@ class FridaDiscovery:
             if LOG_STREAMER_AVAILABLE:
                 log_streamer.add_log(device_serial, "frida_install", f"Removing {len(paths)} Frida server(s)", "info")
             
-            device = self.adb_manager.get_device(device_serial)
-            if not device:
-                logger.error(f"Device {device_serial} not found")
-                return {"success": False, "message": "Device not found", "removed": []}
-            
             # First, stop any running Frida servers
             if is_running_func and stop_server_func:
                 if is_running_func(device_serial):
@@ -153,16 +143,16 @@ class FridaDiscovery:
                 try:
                     # Try with root first
                     try:
-                        result = device.shell(f"su -c 'rm -f {path}'")
+                        result = self.adb_manager.execute_shell(device_serial, f"su -c 'rm -f {path}'")
                         if LOG_STREAMER_AVAILABLE:
                             log_streamer.add_log(device_serial, "adb_operations", f"shell: su -c 'rm -f {path}'", "info")
                     except:
-                        result = device.shell(f"rm -f {path}")
+                        result = self.adb_manager.execute_shell(device_serial, f"rm -f {path}")
                         if LOG_STREAMER_AVAILABLE:
                             log_streamer.add_log(device_serial, "adb_operations", f"shell: rm -f {path}", "info")
                     
                     # Verify removal
-                    check = device.shell(f"ls {path} 2>/dev/null")
+                    check = self.adb_manager.execute_shell(device_serial, f"ls {path} 2>/dev/null")
                     if not check or "No such file" in check:
                         removed.append(path)
                         logger.info(f"Successfully removed {path}")
