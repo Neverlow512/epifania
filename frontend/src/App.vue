@@ -22,7 +22,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            Frida (Custom)
+            Download Frida-Server (Custom)
           </label>
           <div
             tabindex="0"
@@ -30,18 +30,34 @@
           >
             <div class="card-body">
               <h3 class="font-bold text-white mb-3">Frida Custom Download</h3>
-              
-              <!-- Version Selector -->
-              <div class="form-control mb-4">
+            <!-- Architecture Selector -->
+            <div class="form-control mb-3">
+              <label class="label">
+                <span class="label-text text-slate-400">Select Architecture</span>
+              </label>
+              <select 
+                v-model="selectedFridaArch"
+                class="select select-sm select-bordered bg-black border-primary/30 focus:border-primary text-white"
+              >
+                <option value="" disabled>Select architecture</option>
+                <option v-for="arch in archOptions" :key="arch" :value="arch">
+                  {{ arch }}
+                </option>
+              </select>
+            </div>
+            <!-- Version Selector -->
+            <div class="form-control mb-4">
                 <label class="label">
-                  <span class="label-text text-slate-400">Select Custom Version</span>
+                <span class="label-text text-slate-400">Select Version (latest 10)</span>
                 </label>
                 <select 
                   v-model="selectedFridaVersion" 
                   class="select select-sm select-bordered bg-black border-primary/30 focus:border-primary text-white"
-                  @focus="loadFridaVersions"
+                :disabled="!selectedFridaArch || isLoadingVersions"
                 >
-                  <option value="" disabled>Select version</option>
+                <option value="" disabled>
+                  {{ !selectedFridaArch ? 'Select architecture first' : (isLoadingVersions ? 'Loading...' : 'Select version') }}
+                </option>
                   <option v-for="version in fridaVersions" :key="version.version" :value="version.version">
                     {{ version.version }}
                   </option>
@@ -53,7 +69,7 @@
                 type="button"
                 class="btn btn-sm btn-primary w-full mb-4"
                 @click="downloadCustomVersion"
-                :disabled="!selectedFridaVersion || isDownloading"
+              :disabled="!selectedFridaArch || !selectedFridaVersion || isDownloading"
               >
                 <svg v-if="!isDownloading" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -127,6 +143,9 @@ export default {
     const adbConnected = ref(false)
     const fridaVersions = ref([])
     const selectedFridaVersion = ref('')
+    const selectedFridaArch = ref('')
+    const archOptions = ref(['arm', 'arm64', 'x86', 'x86_64'])
+    const isLoadingVersions = ref(false)
     const isRestartingAdb = ref(false)
     const isDownloading = ref(false)
     const { success, error, info, warning } = useToast()
@@ -152,19 +171,35 @@ export default {
     })
 
     const loadFridaVersions = async () => {
-      if (fridaVersions.value.length > 0) return
-      
+      // Fetch latest 10 releases directly from GitHub to avoid backend disruption
+      fridaVersions.value = []
+      selectedFridaVersion.value = ''
+      isLoadingVersions.value = true
       try {
-        const response = await axios.get('http://localhost:8000/api/frida/versions')
-        fridaVersions.value = response.data.versions
-        
-        if (fridaVersions.value.length > 0 && !selectedFridaVersion.value) {
-          selectedFridaVersion.value = fridaVersions.value[0].version
-        }
+        const response = await axios.get('https://api.github.com/repos/frida/frida/releases', {
+          params: { per_page: 10 }
+        })
+        const releases = Array.isArray(response.data) ? response.data : []
+        const versions = releases
+          .map(r => ({ version: (r.tag_name || '').replace(/^v/, ''), prerelease: !!r.prerelease }))
+          .filter(v => !!v.version)
+        fridaVersions.value = versions
       } catch (err) {
-        console.error('Failed to load Frida versions:', err)
+        console.error('Failed to load Frida versions from GitHub:', err)
+      } finally {
+        isLoadingVersions.value = false
       }
     }
+
+    // Update versions in real-time when architecture changes
+    watch(selectedFridaArch, async (newArch) => {
+      if (!newArch) {
+        fridaVersions.value = []
+        selectedFridaVersion.value = ''
+        return
+      }
+      await loadFridaVersions()
+    })
 
     const restartAdb = async () => {
       if (isRestartingAdb.value) return
@@ -189,6 +224,10 @@ export default {
     }
 
     const downloadCustomVersion = async () => {
+      if (!selectedFridaArch.value) {
+        warning('Please select an architecture first', 'Download')
+        return
+      }
       if (!selectedFridaVersion.value) {
         warning('Please select a Frida version first', 'Download')
         return
@@ -200,29 +239,7 @@ export default {
         // Check if already cached
         const cachedResponse = await axios.get('http://localhost:8000/api/frida/cached')
         const cached = cachedResponse.data.cached
-        
-        // Get device architecture to check if this specific version+arch is cached
-        const devicesResponse = await axios.get('http://localhost:8000/api/devices')
-        const devices = devicesResponse.data.devices
-        
-        if (devices.length === 0) {
-          warning('No devices connected. Connect a device to download the appropriate architecture.', 'Download')
-          isDownloading.value = false
-          return
-        }
-
-        const device = devices[0]
-        const deviceArch = device.architecture
-        
-        // Map architecture
-        const archMapping = {
-          'armeabi-v7a': 'arm',
-          'armeabi': 'arm',
-          'arm64-v8a': 'arm64',
-          'x86': 'x86',
-          'x86_64': 'x86_64'
-        }
-        const fridaArch = archMapping[deviceArch] || deviceArch
+        const fridaArch = selectedFridaArch.value
         
         // Check if this version+arch combo is already cached
         if (cached[selectedFridaVersion.value] && cached[selectedFridaVersion.value].includes(fridaArch)) {
@@ -233,9 +250,18 @@ export default {
 
         info(`Downloading Frida ${selectedFridaVersion.value} for ${fridaArch}...`, 'Custom Download')
         
-        const response = await axios.post(
+        // Use first available device to trigger backend download & cache, passing selected architecture.
+        const devicesResponse = await axios.get('http://localhost:8000/api/devices')
+        const devices = devicesResponse.data.devices || []
+        if (devices.length === 0) {
+          warning('No devices connected. Connect a device to initiate the download.', 'Download')
+          isDownloading.value = false
+          return
+        }
+        const device = devices[0]
+        await axios.post(
           `http://localhost:8000/api/devices/${device.serial}/frida/install`,
-          { version: selectedFridaVersion.value }
+          { version: selectedFridaVersion.value, architecture: fridaArch }
         )
         
         success(`Frida ${selectedFridaVersion.value} (${fridaArch}) downloaded and cached successfully`, 'Custom Download')
@@ -254,7 +280,7 @@ export default {
       checkConnection().then(connected => {
         if (connected) {
           checkHealth()
-          loadFridaVersions()
+          // Versions load dynamically after architecture selection; leave empty initially
         }
       })
       
@@ -270,10 +296,13 @@ export default {
       adbConnected,
       fridaVersions,
       selectedFridaVersion,
+      selectedFridaArch,
+      archOptions,
+      isLoadingVersions,
       isRestartingAdb,
       isDownloading,
       isBackendConnected,
-      loadFridaVersions,
+      // no explicit load on focus; versions load on architecture selection
       restartAdb,
       downloadCustomVersion
     }
