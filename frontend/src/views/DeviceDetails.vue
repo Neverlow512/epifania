@@ -69,50 +69,6 @@
               </div>
             </div>
           </div>
-          <!-- Server Controls Toolbar -->
-          <div class="mt-3">
-            <div class="text-sm font-semibold text-white mb-1">Frida Server Controls</div>
-            <div class="flex flex-wrap gap-2">
-            <button 
-              type="button"
-              class="btn btn-xs md:btn-sm btn-success gap-2"
-              @click.prevent.stop="startFrida"
-              :disabled="starting || (device && device.frida_server_running)"
-            >
-              <svg v-if="!starting" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span v-if="starting" class="loading loading-spinner loading-xs"></span>
-              {{ starting ? 'Starting...' : 'Start' }}
-            </button>
-            <button 
-              type="button"
-              class="btn btn-xs md:btn-sm btn-error gap-2"
-              @click.prevent.stop="stopFrida"
-              :disabled="stopping || (device && !device.frida_server_running)"
-            >
-              <svg v-if="!stopping" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-              </svg>
-              <span v-if="stopping" class="loading loading-spinner loading-xs"></span>
-              {{ stopping ? 'Stopping...' : 'Stop' }}
-            </button>
-            <button 
-              type="button"
-              class="btn btn-xs md:btn-sm btn-warning gap-2"
-              @click.prevent.stop="restartFrida"
-              :disabled="restarting"
-            >
-              <svg v-if="!restarting" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span v-if="restarting" class="loading loading-spinner loading-xs"></span>
-              {{ restarting ? 'Restarting...' : 'Restart' }}
-            </button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -196,6 +152,19 @@
           </div>
           <div class="modal-action">
             <button type="button" class="btn btn-ghost" @click="showPushDetailsModal = false">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Frida Controls Details Modal -->
+      <div v-if="showFridaControlsDetailsModal" class="modal modal-open">
+        <div class="modal-box bg-neutral-900 border border-primary/30 max-w-md">
+          <h3 class="font-bold text-lg text-white mb-2">Frida Controls - Details</h3>
+          <p class="text-sm text-slate-300 mb-3">
+            Start, stop, or restart the Frida server on the device. Use this widget to manage the server process quickly without shell commands.
+          </p>
+          <div class="modal-action">
+            <button type="button" class="btn btn-ghost" @click="showFridaControlsDetailsModal = false">Close</button>
           </div>
         </div>
       </div>
@@ -310,7 +279,7 @@
             </button>
           </div>
         </div>
-        <!-- Install Frida (Auto) - Compact Widget -->
+        <!-- Install + Push (Combined) - Compact Widget -->
         <div class="card card-compact bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20">
           <div class="card-body">
             <h3 class="card-title text-white mb-2">Install Frida (Auto)</h3>
@@ -336,38 +305,79 @@
                 Details
               </button>
             </div>
+            <div class="border-t border-neutral-700 mt-3 pt-3">
+              <div class="text-xs text-slate-400 mb-2">Push Cached Server (Custom)</div>
+              <div class="flex gap-2">
+                <select 
+                  v-model="selectedCachedVersion" 
+                  class="select select-sm select-bordered bg-neutral-900 border-primary/30 focus:border-primary text-white flex-1"
+                  @focus="loadCachedVersions"
+                >
+                  <option value="" disabled>Select cached version</option>
+                  <option v-for="(architectures, version) in cachedVersions" :key="version" :value="version">
+                    {{ version }} ({{ architectures.join(', ') }})
+                  </option>
+                </select>
+                <button 
+                  type="button"
+                  class="btn btn-sm btn-primary"
+                  @click.prevent.stop="pushCachedServer"
+                  :disabled="pushing || !selectedCachedVersion"
+                >
+                  <span v-if="pushing" class="loading loading-spinner loading-xs"></span>
+                  {{ pushing ? 'Pushing...' : 'Push' }}
+                </button>
+              </div>
+              <div class="flex gap-2 mt-2">
+                <button 
+                  type="button"
+                  class="btn btn-xs btn-ghost"
+                  @click.prevent.stop="showPushDetailsModal = true"
+                >
+                  Details
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-        <!-- Push Cached Server (Custom) - Compact Widget -->
+        <!-- Frida Controls - Compact Widget -->
         <div class="card card-compact bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20">
           <div class="card-body">
-            <h3 class="card-title text-white mb-2">Push Cached Server (Custom)</h3>
-            <div class="flex gap-2">
-              <select 
-                v-model="selectedCachedVersion" 
-                class="select select-sm select-bordered bg-neutral-900 border-primary/30 focus:border-primary text-white flex-1"
-                @focus="loadCachedVersions"
-              >
-                <option value="" disabled>Select cached version</option>
-                <option v-for="(architectures, version) in cachedVersions" :key="version" :value="version">
-                  {{ version }} ({{ architectures.join(', ') }})
-                </option>
-              </select>
+            <h3 class="card-title text-white mb-2">Frida Controls</h3>
+            <div class="flex flex-wrap gap-2">
               <button 
                 type="button"
-                class="btn btn-sm btn-primary"
-                @click.prevent.stop="pushCachedServer"
-                :disabled="pushing || !selectedCachedVersion"
+                class="btn btn-sm btn-success gap-2"
+                @click.prevent.stop="startFrida"
+                :disabled="starting || (device && device.frida_server_running)"
               >
-                <span v-if="pushing" class="loading loading-spinner loading-xs"></span>
-                {{ pushing ? 'Pushing...' : 'Push' }}
+                <span v-if="starting" class="loading loading-spinner loading-xs"></span>
+                <span v-else>Start</span>
+              </button>
+              <button 
+                type="button"
+                class="btn btn-sm btn-error gap-2"
+                @click.prevent.stop="stopFrida"
+                :disabled="stopping || (device && !device.frida_server_running)"
+              >
+                <span v-if="stopping" class="loading loading-spinner loading-xs"></span>
+                <span v-else>Stop</span>
+              </button>
+              <button 
+                type="button"
+                class="btn btn-sm btn-warning gap-2"
+                @click.prevent.stop="restartFrida"
+                :disabled="restarting"
+              >
+                <span v-if="restarting" class="loading loading-spinner loading-xs"></span>
+                <span v-else>Restart</span>
               </button>
             </div>
             <div class="flex gap-2 mt-2">
               <button 
                 type="button"
                 class="btn btn-xs btn-ghost"
-                @click.prevent.stop="showPushDetailsModal = true"
+                @click.prevent.stop="showFridaControlsDetailsModal = true"
               >
                 Details
               </button>
@@ -740,6 +750,7 @@ export default {
     const showDiagnosticsModal = ref(false)
     const showInstallDetailsModal = ref(false)
     const showPushDetailsModal = ref(false)
+    const showFridaControlsDetailsModal = ref(false)
     
     const permissionStatus = ref({
       exists: false,
@@ -1256,6 +1267,7 @@ export default {
       showDiagnosticsModal,
       showInstallDetailsModal,
       showPushDetailsModal,
+      showFridaControlsDetailsModal,
       hasSelectedServers,
       selectedServerPaths,
       permissionStatus,
