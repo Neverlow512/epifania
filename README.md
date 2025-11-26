@@ -735,14 +735,21 @@ Real-time bidirectional WebSocket connection for log streaming.
 
 - **WebSocket Streaming**: Bidirectional real-time log streaming with automatic reconnection
 - **Multiple Log Types**:
-  - **Logcat**: Android system logs (manual-start for performance)
-  - **Frida Installation**: Installation process logs (auto-streaming)
-  - **Frida Server**: Server lifecycle logs (auto-streaming)
-  - **ADB Operations**: All ADB command logs (auto-streaming)
-- **Smart Filtering**: Automatic filtering of noisy system logs in logcat
-- **Buffer Management**: Configurable log buffer sizes with deduplication
+  - **Logcat**: Android system logs (manual-start for performance, filtered for relevance)
+  - **Frida Installation**: Installation process logs (auto-start, event-driven)
+  - **Frida Server**: Server output and status logs (auto-start, continuous streaming from `/data/local/tmp/frida-server.log`)
+  - **ADB Operations**: All ADB command logs with timestamps (auto-start, event-driven)
+- **Auto-Start Behavior**: 
+  - Frida Installation, Frida Server, and ADB Operations logs auto-start and auto-expand on page load
+  - Logcat requires manual start to prevent overwhelming output
+  - Auto-started logs can be paused by user at any time
+- **Smart Optimization**:
+  - Backend version check caching (30-second TTL) to reduce redundant ADB calls
+  - Optimized polling intervals: device details every 15 seconds, Frida connection tests every 30 seconds
+  - Reduced `pidof` and `--version` queries to minimize ADB overhead
+- **Buffer Management**: Configurable log buffer sizes with deduplication and thread-safe access
 - **Historical Logs**: Access to buffered historical logs on connection
-- **Log Controls**: Clear, scroll-to-bottom, and stream start/stop controls
+- **Log Controls**: Clear, scroll-to-bottom, and stream start/stop controls per log type
 
 ### User Interface
 
@@ -847,8 +854,8 @@ The backend follows a modular architecture with clear separation of concerns:
 - `backend/main.py`: FastAPI application entry point with all API endpoints and WebSocket handlers
 - `backend/core/adb_manager.py`: ADB client wrapper for device communication and shell command execution
 - `backend/core/device_manager.py`: Device enumeration combining ADB and Frida data sources
-- `backend/core/installer.py`: Complete Frida server installation, version management, and lifecycle control
-- `backend/core/log_streamer.py`: Real-time log streaming with WebSocket support and buffer management
+- `backend/core/installer.py`: Complete Frida server installation, version management, and lifecycle control with intelligent caching
+- `backend/core/log_streamer.py`: Real-time log streaming with WebSocket support, buffer management, and separate handling for active streams (logcat, frida_server) vs event-driven logs (adb_operations, frida_install)
 - `backend/core/logger.py`: Centralized logging with categorized output and rotating file handlers
 - `backend/core/diagnostics.py`: Comprehensive ADB diagnostics with multiple test suites
 - `backend/monitoring/health_manager.py`: Health monitoring system with periodic checks
@@ -905,12 +912,13 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 
 **Technical Implementation:**
 - Vue 3 Composition API for reactive state management
-- WebSocket integration for real-time log streaming
+- WebSocket integration for real-time log streaming with connection state tracking
 - Automatic reconnection with exponential backoff for backend connectivity
 - Client-side routing with Vue Router
 - Tailwind CSS with DaisyUI components for consistent styling
-- Auto-streaming logs for debugging (Frida Install, Frida Server, ADB Operations)
-- Manual-start logcat streaming for performance optimization
+- Smart auto-streaming: ADB Operations, Frida Install, and Frida Server logs auto-start on page load
+- Manual logcat activation to prevent performance impact from verbose system logs
+- Optimized polling intervals: 15s for device details, 30s for Frida connection tests
 
 ### Dependency Management
 
@@ -1019,10 +1027,13 @@ The test suite provides comprehensive validation that all logging components cor
 - Use the ADB restart button if connection is lost
 
 **Logs Not Streaming:**
-- Verify WebSocket connection is established
+- Most debug logs (ADB Operations, Frida Install, Frida Server) auto-start on page load
+- Logcat requires manual start via the play button to prevent overwhelming output
+- Verify WebSocket connection is established (green indicator)
 - Check that device is still connected
-- Try manually starting the log stream with the play button
+- Ensure logs haven't been manually paused via the pause button
 - Check browser console for WebSocket errors
+- Historical logs are sent immediately on connection, real-time logs follow
 
 **Page Not Loading:**
 - Clear browser cache and reload

@@ -17,19 +17,31 @@ except ImportError:
 class FridaServerManager:
     def __init__(self, adb_manager=None):
         self.adb_manager = adb_manager
+        self._version_cache = {}  # Cache version checks {device_serial: (timestamp, version)}
+        self._version_cache_ttl = 30  # Cache TTL in seconds
         logger.info("FridaServerManager initialized")
     
-    def check_frida_server_version(self, device_serial: str) -> Optional[str]:
+    def check_frida_server_version(self, device_serial: str, force_refresh: bool = False) -> Optional[str]:
         try:
             if not self.adb_manager:
                 logger.error("ADB manager not initialized")
                 return None
+            
+            # Check cache first
+            import time
+            if not force_refresh and device_serial in self._version_cache:
+                timestamp, cached_version = self._version_cache[device_serial]
+                if time.time() - timestamp < self._version_cache_ttl:
+                    logger.debug(f"Using cached Frida server version for {device_serial}: {cached_version}")
+                    return cached_version
             
             # Use adb_manager's execute_shell instead of device.shell
             result = self.adb_manager.execute_shell(device_serial, "/data/local/tmp/frida-server --version")
             if result:
                 version = result.strip()
                 logger.info(f"Frida server version on {device_serial}: {version}")
+                # Cache the result
+                self._version_cache[device_serial] = (time.time(), version)
                 return version
             
             logger.info(f"Frida server not found on {device_serial}")
@@ -38,25 +50,19 @@ class FridaServerManager:
             logger.debug(f"Failed to check Frida server version on {device_serial}: {str(e)}")
             return None
     
-    def is_frida_server_running(self, device_serial: str) -> bool:
+    def is_frida_server_running(self, device_serial: str, use_cache: bool = False) -> bool:
         try:
             if not self.adb_manager:
                 return False
             
-            # Prefer pidof when available
+            # Use pidof as the primary check (faster and more reliable)
             result = self.adb_manager.execute_shell(device_serial, "pidof frida-server")
             running = bool(result and result.strip())
-            if not running:
-                # Fallback to ps variants
-                result = self.adb_manager.execute_shell(device_serial, "ps -A | grep frida-server | grep -v grep")
-                if not result:
-                    result = self.adb_manager.execute_shell(device_serial, "ps | grep frida-server | grep -v grep")
-                running = bool(result and "frida-server" in result)
             
             if running:
-                logger.info(f"Frida server is running on {device_serial}")
+                logger.debug(f"Frida server is running on {device_serial}")
             else:
-                logger.info(f"Frida server is not running on {device_serial}")
+                logger.debug(f"Frida server is not running on {device_serial}")
             
             return running
         except Exception as e:
@@ -225,8 +231,8 @@ class FridaServerManager:
 
             # Use subprocess to start frida-server instead of ppadb's shell()
             # ppadb's device.shell() has issues with backgrounding processes
-            start_command_root = f"su -c 'nohup {server_path} > /data/local/tmp/frida-server.log 2>&1 &'"
-            start_command_nonroot = f"nohup {server_path} > /data/local/tmp/frida-server.log 2>&1 &"
+            start_command_root = f"su -c 'nohup {server_path} -v > /data/local/tmp/frida-server.log 2>&1 &'"
+            start_command_nonroot = f"nohup {server_path} -v > /data/local/tmp/frida-server.log 2>&1 &"
 
             started_with_root = False
 
@@ -251,8 +257,19 @@ class FridaServerManager:
             # Give the root attempt a moment to spawn the process
             time.sleep(2)
 
+            # Check once if server started with root
+            root_success = False
+            if started_with_root:
+                pidof_check = self.adb_manager.execute_shell(device_serial, "pidof frida-server")
+                root_success = bool(pidof_check and pidof_check.strip())
+                if root_success:
+                    logger.info("Frida server started with root privileges")
+                    if LOG_STREAMER_AVAILABLE:
+                        log_streamer.add_log(device_serial, "frida_server", "Server started with root", "info")
+                    debug_logger.add_startup_info("Root start: Successful")
+
             # If root either was not used or did not result in a running server, try non-root as fallback
-            if not has_root or not self.is_frida_server_running(device_serial):
+            if not has_root or not root_success:
                 try:
                     # Use subprocess.Popen for non-root as well
                     cmd = ['adb', '-s', device_serial, 'shell', start_command_nonroot]
@@ -267,18 +284,18 @@ class FridaServerManager:
                     logger.error(f"Non-root start failed: {str(e2)}")
                     debug_logger.add_startup_info(f"Non-root start failed: {str(e2)}")
             
-            # Check if process is running
+            # Check if process is running (single check with detailed logging)
+            time.sleep(1)  # Give it a moment to start
+            
             pidof_result = self.adb_manager.execute_shell(device_serial, "pidof frida-server")
-            ps_result = self.adb_manager.execute_shell(device_serial, "ps -A | grep frida-server | grep -v grep")
             
             debug_logger.add_adb_operation("pidof frida-server", pidof_result if pidof_result else "No output")
-            debug_logger.add_adb_operation("ps -A | grep frida-server | grep -v grep", ps_result if ps_result else "No output")
             
-            if self.is_frida_server_running(device_serial):
-                logger.info(f"Frida server started successfully on {device_serial}")
+            if pidof_result and pidof_result.strip():
+                logger.info(f"Frida server started successfully on {device_serial} (PID: {pidof_result.strip()})")
                 if LOG_STREAMER_AVAILABLE:
-                    log_streamer.add_log(device_serial, "frida_server", "Frida server started successfully", "info")
-                debug_logger.add_startup_info("Process Check: Running")
+                    log_streamer.add_log(device_serial, "frida_server", f"Frida server started successfully (PID: {pidof_result.strip()})", "info")
+                debug_logger.add_startup_info(f"Process Check: Running (PID: {pidof_result.strip()})")
                 debug_logger.set_result(True, "Frida server started successfully")
                 debug_logger.write()
                 return True

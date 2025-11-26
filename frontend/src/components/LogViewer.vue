@@ -254,6 +254,20 @@ export default {
         console.log('WebSocket connected')
         wsReadyResolvers.forEach((resolve) => resolve())
         wsReadyResolvers = []
+        
+        // Auto-start streams for non-logcat logs directly on connection
+        autoStreamLogs.forEach(logType => {
+          if (!manuallyStoppedLogs[logType] && !streamingLogs[logType]) {
+            try {
+              ws.send(JSON.stringify({ action: 'start', log_type: logType }))
+              streamingLogs[logType] = true
+              expandedLogs[logType] = true
+              console.log(`Auto-started ${logType} stream`)
+            } catch (err) {
+              console.error(`Failed to auto-start ${logType}:`, err)
+            }
+          }
+        })
       }
 
       ws.onmessage = (event) => {
@@ -380,21 +394,8 @@ export default {
         manuallyStoppedLogs[logType] = false
       })
       
+      // Connect WebSocket - auto-start happens in onopen callback
       connectWebSocket()
-      
-      // Auto-start streaming for debug logs when WebSocket is ready
-      ensureWebSocketReady().then(() => {
-        autoStreamLogs.forEach(logType => {
-          if (!manuallyStoppedLogs[logType]) {
-            try {
-              ws.send(JSON.stringify({ action: 'start', log_type: logType }))
-              streamingLogs[logType] = true
-            } catch (err) {
-              console.error(`Failed to auto-start ${logType}:`, err)
-            }
-          }
-        })
-      })
     })
 
     onUnmounted(() => {

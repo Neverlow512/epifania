@@ -240,14 +240,27 @@ class LogStreamer:
                 except Exception:
                     pass
 
-    async def stream_frida_server(self, device_id: str):
+    async def stream_frida_server(self, device_id: str, adb_manager):
         try:
             logger.info(f"Starting Frida server output stream for device {device_id}")
             self.set_streaming(device_id, "frida_server", True)
+            
+            # Add initial status message
+            self.add_log(device_id, "frida_server", "Frida server log stream started", "info")
+            
+            # Check if server is running and get its PID
+            pid_result = adb_manager.execute_shell(device_id, "pidof frida-server")
+            if pid_result and pid_result.strip():
+                self.add_log(device_id, "frida_server", f"Frida server running (PID: {pid_result.strip()})", "info")
+            else:
+                self.add_log(device_id, "frida_server", "Frida server is not currently running", "warning")
 
             def read_frida_output():
                 process = None
                 try:
+                    # Ensure log file exists
+                    adb_manager.execute_shell(device_id, "touch /data/local/tmp/frida-server.log")
+                    
                     cmd = ["adb", "-s", device_id, "shell", "tail", "-n", "200", "-f", "/data/local/tmp/frida-server.log"]
                     process = subprocess.Popen(
                         cmd,

@@ -1125,17 +1125,19 @@ export default {
     }
 
     const startConnectionTracking = () => {
+      // Poll device status every 15 seconds
       processCheckInterval = setInterval(async () => {
         await loadDeviceDetails(false)
-      }, 3000)
+      }, 15000)
       
+      // Test Frida connection every 30 seconds if server is running
       connectionCheckInterval = setInterval(async () => {
         if (device.value?.frida_server_running) {
           await testFridaConnection()
         } else {
           fridaConnected.value = false
         }
-      }, 10000)
+      }, 30000)
     }
 
     const stopConnectionTracking = () => {

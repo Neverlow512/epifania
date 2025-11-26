@@ -507,16 +507,19 @@ async def websocket_logs(websocket: WebSocket, device_id: str):
             action = data.get("action")
             log_type = data.get("log_type")
             
+            logger.info(f"WebSocket received action='{action}' log_type='{log_type}' for device {device_id}")
+            
             if action == "start" and log_type:
                 logger.info(f"Starting {log_type} stream for device {device_id}")
                 active_streams[log_type] = True
                 # Register real-time updates for the requested log type
                 log_streamer.register_subscriber(device_id, log_type, loop, send_payload)
                 
-                # Send historical logs first
+                # Send historical logs first (for all log types)
                 if log_type == "logcat":
                     # Populate history buffer from device
                     log_streamer.fetch_logcat_history(device_id, device_manager.adb_manager, max_lines=500)
+                
                 historical_logs = log_streamer.get_logs(device_id, log_type)
                 for log_entry in historical_logs:
                     await websocket.send_json({
@@ -526,15 +529,22 @@ async def websocket_logs(websocket: WebSocket, device_id: str):
                         "timestamp": log_entry.get("timestamp", "")
                     })
                 
-                # Start streaming based on log type
-                if log_type == "logcat":
+                # Start active streaming only for log types that need it
+                # adb_operations and frida_install are event-driven (populated via add_log calls)
+                if log_type == "logcat" and not log_streamer.is_streaming(device_id, log_type):
                     asyncio.create_task(log_streamer.stream_logcat(
                         device_id, 
                         device_manager.adb_manager,
                         loop
                     ))
-                elif log_type == "frida_server":
-                    asyncio.create_task(log_streamer.stream_frida_server(device_id))
+                elif log_type == "frida_server" and not log_streamer.is_streaming(device_id, log_type):
+                    asyncio.create_task(log_streamer.stream_frida_server(device_id, device_manager.adb_manager))
+                
+                # For event-driven logs, just acknowledge they're "active" (receiving updates)
+                if log_type in ["adb_operations", "frida_install"]:
+                    logger.info(f"{log_type} is now active and will receive real-time updates")
+                    # Mark as streaming even though there's no background process
+                    log_streamer.set_streaming(device_id, log_type, True)
                 
             elif action == "stop" and log_type:
                 logger.info(f"Stopping {log_type} stream for device {device_id}")
