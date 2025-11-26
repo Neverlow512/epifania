@@ -1,9 +1,9 @@
 <template>
-  <div class="card bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20">
+  <div class="card card-compact bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20">
     <div class="card-body">
       <h3 class="card-title text-white mb-4">Device Logs</h3>
       
-      <div class="space-y-2">
+      <div class="space-y-1">
         <!-- Logcat -->
         <div class="collapse collapse-arrow bg-black/30 border border-primary/20">
           <input type="checkbox" v-model="expandedLogs.logcat" @change="handleToggle('logcat')" />
@@ -33,7 +33,7 @@
             <span class="text-xs text-slate-400">{{ logs.logcat.length }} lines</span>
           </div>
           <div class="collapse-content">
-            <div class="log-container bg-[#0a0a0a] rounded-lg p-4 h-64 overflow-y-auto font-mono text-xs" ref="logcatContainer">
+            <div class="log-container bg-[#0a0a0a] rounded-lg p-4 h-48 overflow-y-auto font-mono text-xs" ref="logcatContainer">
               <div v-if="logs.logcat.length === 0" class="text-slate-500 text-center py-8">
                 No logs yet. Click the play button to start streaming.
               </div>
@@ -79,7 +79,7 @@
             <span class="text-xs text-slate-400">{{ logs.frida_install.length }} lines</span>
           </div>
           <div class="collapse-content">
-            <div class="log-container bg-[#0a0a0a] rounded-lg p-4 h-64 overflow-y-auto font-mono text-xs" ref="fridaInstallContainer">
+            <div class="log-container bg-[#0a0a0a] rounded-lg p-4 h-48 overflow-y-auto font-mono text-xs" ref="fridaInstallContainer">
               <div v-if="logs.frida_install.length === 0" class="text-slate-500 text-center py-8">
                 No installation logs yet.
               </div>
@@ -125,7 +125,7 @@
             <span class="text-xs text-slate-400">{{ logs.frida_server.length }} lines</span>
           </div>
           <div class="collapse-content">
-            <div class="log-container bg-[#0a0a0a] rounded-lg p-4 h-64 overflow-y-auto font-mono text-xs" ref="fridaServerContainer">
+            <div class="log-container bg-[#0a0a0a] rounded-lg p-4 h-48 overflow-y-auto font-mono text-xs" ref="fridaServerContainer">
               <div v-if="logs.frida_server.length === 0" class="text-slate-500 text-center py-8">
                 No server logs yet.
               </div>
@@ -171,7 +171,7 @@
             <span class="text-xs text-slate-400">{{ logs.adb_operations.length }} lines</span>
           </div>
           <div class="collapse-content">
-            <div class="log-container bg-[#0a0a0a] rounded-lg p-4 h-64 overflow-y-auto font-mono text-xs" ref="adbOperationsContainer">
+            <div class="log-container bg-[#0a0a0a] rounded-lg p-4 h-48 overflow-y-auto font-mono text-xs" ref="adbOperationsContainer">
               <div v-if="logs.adb_operations.length === 0" class="text-slate-500 text-center py-8">
                 No ADB operation logs yet.
               </div>
