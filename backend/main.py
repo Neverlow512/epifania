@@ -11,6 +11,7 @@ from core.diagnostics import DeviceDiagnostics
 from core.logger import get_logger
 from core.log_streamer import log_streamer
 from monitoring import health_manager, process_manager
+from device.processes_tab.routes import router as processes_router
 import asyncio
 from datetime import datetime
 import frida
@@ -81,6 +82,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register routers
+app.include_router(processes_router, prefix="/api/devices", tags=["processes"])
 
 device_manager = DeviceManager()
 installer = Installer(adb_manager=device_manager.adb_manager)

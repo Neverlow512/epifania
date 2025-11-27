@@ -42,9 +42,11 @@ A GUI-based Dynamic Instrumentation Platform wrapping Frida and ADB for security
 - ✅ Modal-based detailed information views
 - ✅ Direct GitHub API integration for Frida releases
 - ✅ Tab navigation infrastructure with reusable components
+- ✅ Processes tab with real-time process monitoring, inspection, and termination
+- ✅ Process metrics collection with historical data tracking
+- ✅ Modular frontend architecture with feature-based directory structure
 
 **In Development:**
-- 🔄 Processes tab for runtime monitoring and management
 - 🔄 Packages tab for application catalog and lifecycle control
 - 🔄 Files tab for device filesystem browsing
 - 🔄 Workshop tab for script injection and active analysis
@@ -550,6 +552,134 @@ Tests the Frida connection by attempting to connect and enumerate processes.
 }
 ```
 
+### Process Management
+
+#### List Processes
+
+```
+GET /api/devices/{device_id}/processes
+```
+
+Retrieves all running processes on the device with memory usage, state, and user information.
+
+**Response:**
+```json
+{
+  "processes": [
+    {
+      "pid": 1234,
+      "name": "com.example.app",
+      "user": "u0_a123",
+      "cpu_percent": 0.0,
+      "memory_kb": 45678,
+      "memory_mb": 44.61,
+      "vsz_kb": 1234567,
+      "state": "sleeping",
+      "ppid": 567,
+      "command": "com.example.app"
+    }
+  ],
+  "count": 245,
+  "stats": {
+    "total": 245,
+    "user": 89,
+    "system": 156,
+    "total_memory_mb": 1234.56
+  },
+  "changes": {
+    "spawned": [],
+    "killed": [],
+    "changed": []
+  }
+}
+```
+
+#### Get Process Details
+
+```
+GET /api/devices/{device_id}/processes/{pid}
+```
+
+Retrieves detailed information about a specific process including command line, status, threads, open files, and memory maps.
+
+**Response:**
+```json
+{
+  "pid": 1234,
+  "cmdline": "com.example.app --flag value",
+  "status": {
+    "Name": "com.example.app",
+    "State": "S (sleeping)",
+    "Uid": "10123",
+    "VmRSS": "45678 kB"
+  },
+  "threads": [
+    {"tid": 1234},
+    {"tid": 1235}
+  ],
+  "open_files": [
+    {"fd": "0", "path": "/dev/null"},
+    {"fd": "1", "path": "/data/data/com.example.app/files/log.txt"}
+  ],
+  "memory_maps": [
+    {
+      "address": "12c00000-12d00000",
+      "perms": "r-xp",
+      "offset": "00000000",
+      "dev": "fd:00",
+      "inode": "12345",
+      "pathname": "/system/lib/libc.so"
+    }
+  ]
+}
+```
+
+#### Kill Process
+
+```
+POST /api/devices/{device_id}/processes/{pid}/kill
+```
+
+Terminates a process on the device. Attempts root access if available.
+
+**Query Parameters:**
+- `signal` (optional): Signal number to send (default: 9 for SIGKILL)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Process 1234 terminated successfully"
+}
+```
+
+#### Get Process Metrics
+
+```
+GET /api/devices/{device_id}/processes/metrics
+```
+
+Retrieves historical metrics for processes on the device.
+
+**Query Parameters:**
+- `pid` (optional): Filter metrics for a specific process
+- `duration` (optional): Number of data points to return (default: 60)
+
+**Response:**
+```json
+{
+  "device": "emulator-5554",
+  "pid": 1234,
+  "metrics": [
+    {
+      "timestamp": "2024-11-23T10:30:00.000Z",
+      "cpu_percent": 5.2,
+      "memory_mb": 44.61
+    }
+  ]
+}
+```
+
 ### Diagnostics
 
 #### Run ADB Diagnostics
@@ -704,7 +834,7 @@ Real-time bidirectional WebSocket connection for log streaming.
 
 The device details interface is organized into tabbed sections for clear separation of functionality:
 
-**Device Tab:**
+**Device Tab (Overview):**
 - Compact header showing device name, type badge, connection status, SDK version, and root status
 - Complete Frida server lifecycle management (install, start, stop, restart)
 - Automatic and manual Frida version installation with architecture selection
@@ -714,8 +844,24 @@ The device details interface is organized into tabbed sections for clear separat
 - Real-time log streaming (logcat, Frida operations, ADB operations)
 - Modal-based detailed information views for complex operations
 
+**Processes Tab:**
+- Real-time process list with auto-refresh (configurable 2-second interval)
+- Process statistics showing total, user, and system process counts with memory usage
+- Search functionality across PID, name, user, and command
+- Filter by process type (all, user, system)
+- Sort by PID, name, memory usage, or user
+- Paginated process table with 50 processes per page
+- Process inspection with detailed information:
+  - Command line arguments
+  - Process status (/proc/pid/status)
+  - Thread listing
+  - Open file descriptors
+  - Memory maps (first 50 entries)
+- Process termination with confirmation dialog
+- Process state indicators (running, sleeping, zombie, traced, disk_sleep)
+- Change detection for spawned, killed, and resource-intensive processes
+
 **Placeholder Tabs (In Development):**
-- **Processes**: Runtime process monitoring and management
 - **Packages**: Application catalog and lifecycle control
 - **Files**: Device filesystem browser
 - **Workshop**: Script injection and active analysis workspace
@@ -748,6 +894,25 @@ The device details interface is organized into tabbed sections for clear separat
 - **Permission Management**: Check and set executable permissions on Frida binaries
 - **Connection Testing**: Validate Frida connectivity by enumerating processes
 - **Cleanup Tools**: Remove old or duplicate Frida server binaries from devices
+
+### Process Monitoring
+
+- **Real-time Process List**: Enumerate all running processes via ADB with automatic refresh
+- **Process Statistics**: Display total, user, and system process counts with aggregate memory usage
+- **Search and Filter**: Find processes by PID, name, user, or command with type filtering (all/user/system)
+- **Sorting Options**: Sort by PID, name, memory usage, or user
+- **Pagination**: Navigate large process lists with configurable page size
+- **Process Inspection**: View detailed process information including:
+  - Full command line arguments
+  - Process status from /proc filesystem
+  - Thread enumeration
+  - Open file descriptors
+  - Memory maps (limited to first 50 entries)
+- **Process Termination**: Kill processes with confirmation dialog (attempts root access if available)
+- **State Indicators**: Visual badges for process states (running, sleeping, zombie, traced, disk_sleep)
+- **Change Detection**: Track spawned, killed, and resource-intensive processes between refreshes
+- **Metrics Storage**: Historical CPU and memory data with configurable retention (120 data points per process)
+- **Auto-Refresh**: Configurable refresh interval (default 2 seconds) with toggle control
 
 ### Health Monitoring & Diagnostics
 
@@ -821,15 +986,28 @@ epifania/
 │   │   ├── log_streamer.py       # Real-time log streaming
 │   │   ├── logger.py             # Centralized logging
 │   │   └── diagnostics.py        # ADB diagnostics system
+│   ├── device/                   # Device-specific feature modules
+│   │   ├── __init__.py
+│   │   └── processes_tab/        # Process monitoring module
+│   │       ├── __init__.py
+│   │       ├── routes.py         # Process API endpoints
+│   │       └── monitoring/       # Process monitoring logic
+│   │           ├── __init__.py
+│   │           └── dprocess_monitor.py  # Process monitor class
 │   ├── monitoring/               # Health and process monitoring
 │   │   ├── __init__.py
 │   │   ├── health_manager.py     # Health check system
 │   │   └── process_manager.py    # Process cleanup and PID tracking
+│   ├── frida_mgmt/               # Frida server management
+│   │   ├── __init__.py
+│   │   └── manage/               # Frida management modules
+│   │       ├── discovery.py      # Server discovery
+│   │       ├── permissions.py    # Permission management
+│   │       └── server.py         # Server lifecycle control
 │   ├── frida_servers/            # Cached Frida server binaries
 │   │   └── {version}/            # Version-specific directories
 │   │       └── {arch}/           # Architecture-specific binaries
-│   ├── logs/                     # Application logs (not in backend/)
-│   ├── routers/                  # API route modules (future)
+│   ├── routers/                  # API route modules
 │   ├── venv/                     # Python virtual environment
 │   ├── main.py                   # FastAPI application entry
 │   └── requirements.txt          # Python dependencies
@@ -849,11 +1027,29 @@ epifania/
 │   │   ├── views/                # Page components
 │   │   │   ├── Dashboard.vue     # Device list view
 │   │   │   ├── DeviceDetails.vue # Tab container with routing
-│   │   │   ├── DeviceTab.vue     # Device management tab
-│   │   │   ├── ProcessesTab.vue  # Process monitoring (placeholder)
-│   │   │   ├── PackagesTab.vue   # Package management (placeholder)
-│   │   │   ├── FilesTab.vue      # File browser (placeholder)
-│   │   │   └── WorkshopTab.vue   # Analysis workspace (placeholder)
+│   │   │   └── device/           # Device tab modules (feature-based)
+│   │   │       ├── overview/     # Device overview tab
+│   │   │       │   ├── DeviceTab.vue
+│   │   │       │   ├── components/
+│   │   │       │   └── composables/
+│   │   │       ├── processes/    # Process monitoring tab
+│   │   │       │   ├── ProcessesTab.vue
+│   │   │       │   ├── components/
+│   │   │       │   │   ├── ProcessControlBar.vue
+│   │   │       │   │   ├── ProcessDetailsModal.vue
+│   │   │       │   │   ├── ProcessKillModal.vue
+│   │   │       │   │   ├── ProcessStatsBar.vue
+│   │   │       │   │   └── ProcessTable.vue
+│   │   │       │   └── composables/
+│   │   │       │       ├── useProcessActions.js
+│   │   │       │       ├── useProcesses.js
+│   │   │       │       └── useProcessFilters.js
+│   │   │       ├── packages/     # Package management (placeholder)
+│   │   │       │   └── PackagesTab.vue
+│   │   │       ├── files/        # File browser (placeholder)
+│   │   │       │   └── FilesTab.vue
+│   │   │       └── workshop/     # Analysis workspace (placeholder)
+│   │   │           └── WorkshopTab.vue
 │   │   ├── App.vue               # Root component
 │   │   ├── main.js               # Application entry
 │   │   └── style.css             # Global styles
@@ -894,16 +1090,20 @@ epifania/
 
 The backend follows a modular architecture with clear separation of concerns:
 
-- `backend/main.py`: FastAPI application entry point with all API endpoints and WebSocket handlers
+- `backend/main.py`: FastAPI application entry point with core API endpoints and WebSocket handlers
 - `backend/core/adb_manager.py`: ADB client wrapper for device communication and shell command execution
 - `backend/core/device_manager.py`: Device enumeration combining ADB and Frida data sources
 - `backend/core/installer.py`: Complete Frida server installation, version management, and lifecycle control with intelligent caching
 - `backend/core/log_streamer.py`: Real-time log streaming with WebSocket support, buffer management, and separate handling for active streams (logcat, frida_server) vs event-driven logs (adb_operations, frida_install)
 - `backend/core/logger.py`: Centralized logging with categorized output and rotating file handlers
 - `backend/core/diagnostics.py`: Comprehensive ADB diagnostics with multiple test suites
+- `backend/device/`: Feature modules for device-specific functionality
+  - `backend/device/processes_tab/routes.py`: Process management API endpoints (list, details, kill, metrics)
+  - `backend/device/processes_tab/monitoring/dprocess_monitor.py`: Process monitoring class with ADB-based process enumeration, metrics collection, and change detection
+- `backend/frida_mgmt/manage/`: Frida server management modules (discovery, permissions, server lifecycle)
 - `backend/monitoring/health_manager.py`: Health monitoring system with periodic checks
 - `backend/monitoring/process_manager.py`: Process cleanup and PID file management
-- `backend/routers/`: API route handlers (reserved for future modularization)
+- `backend/routers/`: API route handlers for modular endpoint organization
 
 ### Logging Structure
 
@@ -943,11 +1143,12 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 **Views:**
 - `frontend/src/views/Dashboard.vue`: Device list with auto-refresh and scanning capabilities
 - `frontend/src/views/DeviceDetails.vue`: Tab container with compact device header and tab navigation
-- `frontend/src/views/DeviceTab.vue`: Device management interface with Frida controls, diagnostics, and log streaming
-- `frontend/src/views/ProcessesTab.vue`: Placeholder for process monitoring (in development)
-- `frontend/src/views/PackagesTab.vue`: Placeholder for package management (in development)
-- `frontend/src/views/FilesTab.vue`: Placeholder for file browser (in development)
-- `frontend/src/views/WorkshopTab.vue`: Placeholder for analysis workspace (in development)
+- `frontend/src/views/device/`: Feature-based tab modules with components and composables
+  - `overview/DeviceTab.vue`: Device management interface with Frida controls, diagnostics, and log streaming
+  - `processes/ProcessesTab.vue`: Process monitoring with real-time updates, search, filter, and inspection
+  - `packages/PackagesTab.vue`: Placeholder for package management (in development)
+  - `files/FilesTab.vue`: Placeholder for file browser (in development)
+  - `workshop/WorkshopTab.vue`: Placeholder for analysis workspace (in development)
 
 **Components:**
 - `frontend/src/components/DeviceCard.vue`: Reusable device card with status indicators and actions
@@ -958,9 +1159,13 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 **Composables:**
 - `frontend/src/composables/useApiConnection.js`: Backend connection management with auto-reconnect
 - `frontend/src/composables/useToast.js`: Toast notification state management
+- `frontend/src/views/device/processes/composables/useProcesses.js`: Process fetching with auto-refresh
+- `frontend/src/views/device/processes/composables/useProcessFilters.js`: Search, filter, sort, and pagination logic
+- `frontend/src/views/device/processes/composables/useProcessActions.js`: Process inspection and termination actions
 
 **Technical Implementation:**
 - Vue 3 Composition API for reactive state management
+- Feature-based directory structure: Each tab has its own directory with components and composables
 - Component-based architecture with clear separation of concerns
 - WebSocket integration for real-time log streaming with connection state tracking
 - Automatic reconnection with exponential backoff for backend connectivity
@@ -969,11 +1174,12 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - Tailwind CSS with DaisyUI components for consistent styling, including card-compact variants
 - Smart auto-streaming: ADB Operations, Frida Install, and Frida Server logs auto-start on page load
 - Manual logcat activation to prevent performance impact from verbose system logs
-- Optimized polling intervals: 15s for device details, 30s for Frida connection tests
+- Optimized polling intervals: 15s for device details, 30s for Frida connection tests, 2s for process list
 - Direct GitHub API integration: Fetches latest 10 Frida releases client-side to avoid backend overhead
 - Architecture-first workflow: Users select architecture before version selection for custom downloads
 - Modal-based detail views: Comprehensive information accessible via "Details" buttons without cluttering main interface
 - Reusable tab navigation component with keyboard accessibility
+- Composable-based state management for process monitoring with separation of data fetching, filtering, and actions
 
 ### Dependency Management
 

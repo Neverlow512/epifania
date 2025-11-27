@@ -663,7 +663,7 @@
 </template>
 
 <script>
-import LogViewer from '../components/LogViewer.vue'
+import LogViewer from '../../../components/LogViewer.vue'
 
 export default {
   name: 'DeviceTab',
