@@ -21,11 +21,12 @@ A GUI-based Dynamic Instrumentation Platform wrapping Frida and ADB for security
 - ✅ Automated startup scripts for development environment
 - ✅ Frida server installation, management, and version control
 - ✅ Real-time log streaming via WebSocket (logcat, Frida operations, ADB operations)
-- ✅ Device detail view with comprehensive management interface
+- ✅ Tabbed device details interface with query parameter routing
+- ✅ Device tab with Frida server controls and management
 - ✅ Frida server start/stop/restart controls
 - ✅ Cached Frida server management and deployment
 - ✅ Auto-refresh device list with connection state tracking
-- ✅ Vue Router integration with multi-page navigation
+- ✅ Vue Router integration with multi-page navigation and deep linking
 - ✅ Health monitoring system with periodic checks
 - ✅ Process management with cleanup and PID tracking
 - ✅ Backend auto-reconnect with exponential backoff
@@ -40,13 +41,13 @@ A GUI-based Dynamic Instrumentation Platform wrapping Frida and ADB for security
 - ✅ Compact UI with information density optimization
 - ✅ Modal-based detailed information views
 - ✅ Direct GitHub API integration for Frida releases
+- ✅ Tab navigation infrastructure with reusable components
 
-**Planned Features:**
-- 🔄 Process enumeration and management
-- 🔄 Application listing and package management
-- 🔄 Script injection interface with code editor
-- 🔄 Memory inspection tools
-- 🔄 Network traffic interception
+**In Development:**
+- 🔄 Processes tab for runtime monitoring and management
+- 🔄 Packages tab for application catalog and lifecycle control
+- 🔄 Files tab for device filesystem browsing
+- 🔄 Workshop tab for script injection and active analysis
 
 ## Architecture
 
@@ -682,16 +683,16 @@ Real-time bidirectional WebSocket connection for log streaming.
 
 | Component | Technology | Version | Purpose |
 |-----------|-----------|---------|---------|
-| Backend Framework | FastAPI | 0.121.3 | RESTful API server |
+| Backend Framework | FastAPI | 0.122.0 | RESTful API server |
 | Backend Runtime | Python | 3.8+ | Orchestration and business logic |
 | ASGI Server | Uvicorn | 0.38.0 | High-performance async server |
 | Instrumentation | Frida | 17.5.1 | Dynamic code injection and hooking |
 | Device Management | Native ADB | System | Android device communication via subprocess |
-| Data Validation | Pydantic | 2.12.4 | Request/response validation |
-| WebSocket | websockets | 13.1 | Real-time log streaming |
-| Process Management | psutil | 6.1.0 | System and process monitoring |
-| Frontend Framework | Vue 3 | 3.5.24 | Reactive user interface |
-| Routing | Vue Router | 4.6.3 | Client-side navigation |
+| Data Validation | Pydantic | 2.12.5 | Request/response validation |
+| WebSocket | websockets | 13.1 | Real-time log streaming (pinned version) |
+| Process Management | psutil | 7.1.3 | System and process monitoring |
+| Frontend Framework | Vue 3 | 3.5.25 | Reactive user interface |
+| Routing | Vue Router | 4.6.3 | Client-side navigation with query params |
 | Build Tool | Vite | 7.2.4 | Development server and bundler |
 | Styling | Tailwind CSS | 4.1.17 | Utility-first CSS framework |
 | UI Components | DaisyUI | 5.5.5 | Component library |
@@ -699,44 +700,31 @@ Real-time bidirectional WebSocket connection for log streaming.
 
 ## Features
 
-### UI Optimization (fix/solve-ui-size branch)
+### Tab Navigation Structure
 
-This branch introduces significant UI improvements focused on information density and usability:
+The device details interface is organized into tabbed sections for clear separation of functionality:
 
-**Layout Improvements:**
-- Compact card styling throughout the interface for better space utilization
-- Reduced log viewer height (from 64 to 48 units) allowing more content on screen
-- Consolidated device detail page layout with 4-column grid for summary widgets
-- Integrated diagnostics into connection status widget with inline controls
-- Combined Install and Push operations in unified compact widget
-- Smaller typography and padding adjustments for denser information display
+**Device Tab:**
+- Compact header showing device name, type badge, connection status, SDK version, and root status
+- Complete Frida server lifecycle management (install, start, stop, restart)
+- Automatic and manual Frida version installation with architecture selection
+- Frida server discovery and cleanup tools
+- Permission management for Frida binaries
+- Comprehensive ADB diagnostics with detailed test results
+- Real-time log streaming (logcat, Frida operations, ADB operations)
+- Modal-based detailed information views for complex operations
 
-**Architecture-First Workflow:**
-- Architecture selection required before version download
-- Manual architecture picker (arm, arm64, x86, x86_64) for custom downloads
-- Version dropdown disabled until architecture selected
-- Direct GitHub API integration fetches latest 10 releases client-side
-- Removes backend `/api/frida/versions` dependency for custom downloads
+**Placeholder Tabs (In Development):**
+- **Processes**: Runtime process monitoring and management
+- **Packages**: Application catalog and lifecycle control
+- **Files**: Device filesystem browser
+- **Workshop**: Script injection and active analysis workspace
 
-**Modal-Based Details:**
-- Install Frida (Auto) details modal showing download configuration, URLs, and paths
-- Push Cached Server details modal with version and architecture info
-- Frida Controls details modal explaining server management
-- ADB Diagnostics details modal with comprehensive test results and expandable details
-- Keeps main interface clean while providing access to detailed information
-
-**Information Density:**
-- Compact status indicators with inline metrics
-- Collapsible sections for detailed information
-- Reduced vertical spacing throughout
-- Smaller buttons and controls
-- Consolidated action groups
-
-**Functional Changes:**
-- Architecture parameter passes to backend installation endpoint
-- Client-side Frida version fetching eliminates backend API calls
-- Real-time version loading on architecture selection
-- Enhanced validation flow requiring architecture before download
+**Navigation Features:**
+- Query parameter routing for deep linking (e.g., `?tab=processes`)
+- Reusable tab component with keyboard navigation
+- Smooth tab switching with state preservation
+- URL synchronization for bookmarking specific views
 
 ### Device Management
 
@@ -798,14 +786,16 @@ This branch introduces significant UI improvements focused on information densit
 ### User Interface
 
 - **Dashboard View**: Grid layout of device cards with quick actions
-- **Device Details View**: Comprehensive management interface for individual devices
+- **Tabbed Device Interface**: Organized sections for device management, processes, packages, files, and workshop
+- **Device Tab**: Complete Frida server lifecycle controls with diagnostics and log streaming
 - **Compact Layout**: Optimized information density with card-compact styling
 - **Modal Dialogs**: Detailed information views for Frida installation, cached server push, and diagnostics
-- **Integrated Diagnostics**: ADB diagnostics embedded in connection status widget with modal details view
+- **Tab Navigation**: Reusable component with keyboard support and URL query parameter routing
+- **Deep Linking**: Bookmarkable URLs for specific tabs (e.g., `?tab=processes`)
 - **Responsive Design**: Adapts to different screen sizes and resolutions
 - **Visual Feedback**: Loading states, status badges, and interactive elements
 - **Dark Theme**: Security-focused interface with purple accent color (#7100d0)
-- **Navigation**: Client-side routing with page transitions
+- **Navigation**: Client-side routing with page transitions and state preservation
 - **Toast Notifications**: Notification system with success, error, warning, and info types
 - **Auto-Reconnect**: Automatic backend reconnection with exponential backoff strategy
 - **Custom Frida Download**: Download specific Frida versions with manual architecture selection
@@ -848,16 +838,22 @@ epifania/
 │   ├── src/
 │   │   ├── components/           # Reusable Vue components
 │   │   │   ├── DeviceCard.vue    # Device card component
+│   │   │   ├── TabNavigation.vue # Tab navigation component
 │   │   │   ├── LogViewer.vue     # Log streaming component
 │   │   │   └── ToastNotification.vue  # Toast notification system
 │   │   ├── composables/          # Vue composables
 │   │   │   ├── useApiConnection.js    # Backend connection management
 │   │   │   └── useToast.js            # Toast notification composable
 │   │   ├── router/               # Vue Router configuration
-│   │   │   └── index.js          # Route definitions
+│   │   │   └── index.js          # Route definitions with query params
 │   │   ├── views/                # Page components
 │   │   │   ├── Dashboard.vue     # Device list view
-│   │   │   └── DeviceDetails.vue # Device detail view
+│   │   │   ├── DeviceDetails.vue # Tab container with routing
+│   │   │   ├── DeviceTab.vue     # Device management tab
+│   │   │   ├── ProcessesTab.vue  # Process monitoring (placeholder)
+│   │   │   ├── PackagesTab.vue   # Package management (placeholder)
+│   │   │   ├── FilesTab.vue      # File browser (placeholder)
+│   │   │   └── WorkshopTab.vue   # Analysis workspace (placeholder)
 │   │   ├── App.vue               # Root component
 │   │   ├── main.js               # Application entry
 │   │   └── style.css             # Global styles
@@ -941,15 +937,21 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 **Application Structure:**
 - `frontend/src/App.vue`: Root component with navigation header, global state, and custom Frida download widget with architecture-first selection workflow
 - `frontend/src/main.js`: Application entry point with router integration
-- `frontend/src/router/index.js`: Vue Router configuration for multi-page navigation
+- `frontend/src/router/index.js`: Vue Router configuration for multi-page navigation with query parameter support
 - `frontend/src/style.css`: Global styles and theme configuration
 
 **Views:**
 - `frontend/src/views/Dashboard.vue`: Device list with auto-refresh and scanning capabilities
-- `frontend/src/views/DeviceDetails.vue`: Compact device management interface with Frida controls, integrated diagnostics, and modal-based detail views for installation options and log streaming
+- `frontend/src/views/DeviceDetails.vue`: Tab container with compact device header and tab navigation
+- `frontend/src/views/DeviceTab.vue`: Device management interface with Frida controls, diagnostics, and log streaming
+- `frontend/src/views/ProcessesTab.vue`: Placeholder for process monitoring (in development)
+- `frontend/src/views/PackagesTab.vue`: Placeholder for package management (in development)
+- `frontend/src/views/FilesTab.vue`: Placeholder for file browser (in development)
+- `frontend/src/views/WorkshopTab.vue`: Placeholder for analysis workspace (in development)
 
 **Components:**
 - `frontend/src/components/DeviceCard.vue`: Reusable device card with status indicators and actions
+- `frontend/src/components/TabNavigation.vue`: Reusable tab bar with keyboard navigation and active state styling
 - `frontend/src/components/LogViewer.vue`: Compact real-time log streaming with WebSocket integration, auto-start capabilities, and reduced height for better screen utilization
 - `frontend/src/components/ToastNotification.vue`: Toast notification display system
 
@@ -959,9 +961,11 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 
 **Technical Implementation:**
 - Vue 3 Composition API for reactive state management
+- Component-based architecture with clear separation of concerns
 - WebSocket integration for real-time log streaming with connection state tracking
 - Automatic reconnection with exponential backoff for backend connectivity
-- Client-side routing with Vue Router
+- Client-side routing with Vue Router and query parameter support for deep linking
+- Dynamic component rendering for tab content
 - Tailwind CSS with DaisyUI components for consistent styling, including card-compact variants
 - Smart auto-streaming: ADB Operations, Frida Install, and Frida Server logs auto-start on page load
 - Manual logcat activation to prevent performance impact from verbose system logs
@@ -969,6 +973,7 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - Direct GitHub API integration: Fetches latest 10 Frida releases client-side to avoid backend overhead
 - Architecture-first workflow: Users select architecture before version selection for custom downloads
 - Modal-based detail views: Comprehensive information accessible via "Details" buttons without cluttering main interface
+- Reusable tab navigation component with keyboard accessibility
 
 ### Dependency Management
 
