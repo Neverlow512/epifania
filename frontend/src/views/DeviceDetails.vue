@@ -25,689 +25,119 @@
       <span>Device not found</span>
     </div>
 
-    <!-- Device Details -->
+    <!-- Device Content -->
     <div v-else>
-      <!-- Device Header Card -->
-      <div class="card bg-neutral-900/60 backdrop-blur-sm shadow-2xl border border-primary/20 mb-6">
-        <div class="card-body">
-          <div class="flex items-center gap-4">
-            <div class="avatar placeholder">
-              <div class="w-12 h-12 rounded-lg" :class="getDeviceColor(device.type)">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                </svg>
-              </div>
+      <!-- Compact Header -->
+      <div class="card bg-neutral-900/60 backdrop-blur-sm shadow-2xl border border-primary/20 mb-4">
+        <div class="card-body p-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-bold text-white">{{ device.name }}</h2>
+            <div 
+              class="badge badge-sm"
+              :class="device.type === 'emulator' ? 'badge-primary' : 'badge-accent'"
+            >
+              {{ device.type === 'emulator' ? 'Emulator' : 'Physical' }}
             </div>
-            <div class="flex-1">
-              <h2 class="text-2xl font-bold text-white mb-1">{{ device.name }}</h2>
-              <p class="text-slate-400">{{ device.brand }} {{ device.model }}</p>
-            </div>
-            <div class="badge badge-lg" :class="getStatusBadge(device.state)">
+            <div class="badge badge-sm" :class="getStatusBadge(device.state)">
               {{ device.state }}
             </div>
-          </div>
-
-          <!-- Device Specifications Grid -->
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-            <div class="stat bg-black/30 rounded-lg p-4">
-              <div class="stat-title text-slate-400 text-xs">Serial</div>
-              <div class="stat-value text-white text-sm font-mono">{{ device.serial }}</div>
-            </div>
-            <div class="stat bg-black/30 rounded-lg p-4">
-              <div class="stat-title text-slate-400 text-xs">Android Version</div>
-              <div class="stat-value text-white text-sm">{{ device.android_version }}</div>
-              <div class="stat-desc text-slate-500 text-xs">SDK {{ device.sdk_version }}</div>
-            </div>
-            <div class="stat bg-black/30 rounded-lg p-4">
-              <div class="stat-title text-slate-400 text-xs">Architecture</div>
-              <div class="stat-value text-white text-sm font-mono">{{ device.architecture }}</div>
-            </div>
-            <div class="stat bg-black/30 rounded-lg p-4">
-              <div class="stat-title text-slate-400 text-xs">Root Access</div>
-              <div class="stat-value text-sm" :class="device.has_root ? 'text-green-400' : 'text-red-400'">
-                {{ device.has_root ? 'Available' : 'Not Available' }}
-              </div>
+            <div class="text-slate-400 text-sm">SDK {{ device.sdk_version }}</div>
+            <div class="text-sm" :class="device.has_root ? 'text-green-400' : 'text-red-400'">
+              {{ device.has_root ? 'Root ✓' : 'No Root' }}
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Install Frida (Auto) Details Modal -->
-      <div v-if="showInstallDetailsModal" class="modal modal-open">
-        <div class="modal-box bg-neutral-900 border border-primary/30 max-w-3xl">
-          <h3 class="font-bold text-lg text-white mb-2">Install Frida (Auto) - Details</h3>
-          <div class="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3 mb-3">
-            <div class="flex items-start gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div class="text-blue-200">
-                <p class="font-medium mb-1">Automatic Configuration</p>
-                <p class="text-blue-300/90">
-                  The system selects the appropriate Frida server binary based on your device and deploys it with optimal settings.
-                </p>
-              </div>
-            </div>
-          </div>
-          <div v-if="device" class="bg-black/30 rounded-lg p-3 border border-primary/20">
-            <div class="text-[10px] text-slate-400 uppercase tracking-wider mb-2">Download Configuration</div>
-            <div class="space-y-2">
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-slate-400">Frida Version:</span>
-                <code class="text-primary font-mono font-semibold">{{ autoFridaVersion || 'Loading...' }}</code>
-              </div>
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-slate-400">Platform:</span>
-                <code class="text-white font-mono">Android</code>
-              </div>
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-slate-400">Device Architecture:</span>
-                <code class="text-white font-mono">{{ device.architecture }}</code>
-              </div>
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-slate-400">Frida Architecture:</span>
-                <code class="text-green-400 font-mono font-semibold">{{ getMappedArchitecture(device.architecture) }}</code>
-              </div>
-              <div class="divider my-2"></div>
-              <div class="flex items-start justify-between text-xs">
-                <span class="text-slate-400">Download URL:</span>
-                <code class="text-blue-400 font-mono text-right ml-2 break-all">{{ getFridaDownloadUrl() }}</code>
-              </div>
-              <div class="flex items-start justify-between text-xs">
-                <span class="text-slate-400">Cache Path:</span>
-                <code class="text-slate-300 font-mono text-right ml-2 break-all">{{ getFridaBinaryPath() }}</code>
-              </div>
-              <div class="flex items-start justify-between text-xs">
-                <span class="text-slate-400">Device Path:</span>
-                <code class="text-yellow-400 font-mono text-right ml-2 break-all">/data/local/tmp/frida-server</code>
-              </div>
-            </div>
-          </div>
-          <div class="modal-action">
-            <button type="button" class="btn btn-ghost" @click="showInstallDetailsModal = false">Close</button>
-          </div>
-        </div>
+      <!-- Tab Navigation -->
+      <TabNavigation
+        :tabs="tabs"
+        :activeTab="activeTab"
+        @tab-change="handleTabChange"
+      />
+
+      <!-- Tab Content -->
+      <div class="mt-6">
+        <component 
+          :is="currentTabComponent"
+          :device="device"
+          :adbConnected="adbConnected"
+          :reconnecting="reconnecting"
+          :refreshing="refreshing"
+          :installing="installing"
+          :pushing="pushing"
+          :starting="starting"
+          :stopping="stopping"
+          :restarting="restarting"
+          :cachedVersions="cachedVersions"
+          :selectedCachedVersion="selectedCachedVersion"
+          :autoFridaVersion="autoFridaVersion"
+          :discovering="discovering"
+          :discoveredServers="discoveredServers"
+          :cleaning="cleaning"
+          :showCleanupModal="showCleanupModal"
+          :showDiagnosticsModal="showDiagnosticsModal"
+          :showInstallDetailsModal="showInstallDetailsModal"
+          :showPushDetailsModal="showPushDetailsModal"
+          :showFridaControlsDetailsModal="showFridaControlsDetailsModal"
+          :hasSelectedServers="hasSelectedServers"
+          :selectedServerPaths="selectedServerPaths"
+          :permissionStatus="permissionStatus"
+          :fixingPermissions="fixingPermissions"
+          :diagnosticResults="diagnosticResults"
+          :runningDiagnostics="runningDiagnostics"
+          :fridaConnected="fridaConnected"
+          :testingConnection="testingConnection"
+          :lastConnectionTest="lastConnectionTest"
+          @reconnect-device="reconnectDevice"
+          @refresh-status="refreshStatus"
+          @load-cached-versions="loadCachedVersions"
+          @install-frida-auto="installFridaAuto"
+          @push-cached-server="pushCachedServer"
+          @start-frida="startFrida"
+          @stop-frida="stopFrida"
+          @restart-frida="restartFrida"
+          @discover-servers="discoverServers"
+          @show-cleanup-confirmation="showCleanupConfirmation"
+          @cleanup-servers="cleanupServers"
+          @select-all-servers="selectAllServers"
+          @deselect-all-servers="deselectAllServers"
+          @fix-permissions="fixPermissions"
+          @fix-server-permissions="fixServerPermissions"
+          @run-diagnostics="runDiagnostics"
+          @update:selectedCachedVersion="selectedCachedVersion = $event"
+          @update:showCleanupModal="showCleanupModal = $event"
+          @update:showDiagnosticsModal="showDiagnosticsModal = $event"
+          @update:showInstallDetailsModal="showInstallDetailsModal = $event"
+          @update:showPushDetailsModal="showPushDetailsModal = $event"
+          @update:showFridaControlsDetailsModal="showFridaControlsDetailsModal = $event"
+        />
       </div>
-
-      <!-- Push Cached Server (Custom) Details Modal -->
-      <div v-if="showPushDetailsModal" class="modal modal-open">
-        <div class="modal-box bg-neutral-900 border border-primary/30 max-w-xl">
-          <h3 class="font-bold text-lg text-white mb-2">Push Cached Server (Custom) - Details</h3>
-          <p class="text-sm text-slate-300 mb-3">
-            Push a previously downloaded Frida server binary to the device without re-downloading. Use this for custom versions cached from the Frida dropdown menu.
-          </p>
-          <div class="bg-black/30 rounded-lg p-3 border border-primary/20 text-xs space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-slate-400">Selected Version:</span>
-              <code class="text-primary font-mono">{{ selectedCachedVersion || 'None' }}</code>
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-slate-400">Device Architecture:</span>
-              <code class="text-white font-mono">{{ device ? device.architecture : 'Unknown' }}</code>
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-slate-400">Frida Architecture:</span>
-              <code class="text-green-400 font-mono">{{ device ? getMappedArchitecture(device.architecture) : 'Unknown' }}</code>
-            </div>
-          </div>
-          <div class="modal-action">
-            <button type="button" class="btn btn-ghost" @click="showPushDetailsModal = false">Close</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Frida Controls Details Modal -->
-      <div v-if="showFridaControlsDetailsModal" class="modal modal-open">
-        <div class="modal-box bg-neutral-900 border border-primary/30 max-w-md">
-          <h3 class="font-bold text-lg text-white mb-2">Frida Controls - Details</h3>
-          <p class="text-sm text-slate-300 mb-3">
-            Start, stop, or restart the Frida server on the device. Use this widget to manage the server process quickly without shell commands.
-          </p>
-          <div class="modal-action">
-            <button type="button" class="btn btn-ghost" @click="showFridaControlsDetailsModal = false">Close</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Summary Row: Connection, Frida Status, Install Auto, Push Cached -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <div class="card card-compact bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20">
-          <div class="card-body">
-            <h3 class="card-title text-white mb-2">Connection Status</h3>
-            <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                <span class="text-slate-400">ADB Connection</span>
-                <div class="flex items-center gap-2">
-                  <div class="w-2 h-2 rounded-full" :class="adbConnected ? 'bg-green-500 status-indicator' : 'bg-red-500'"></div>
-                  <span :class="adbConnected ? 'text-green-400' : 'text-red-400'">
-                    {{ adbConnected ? 'Connected' : 'Disconnected' }}
-                  </span>
-                </div>
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-slate-400">Frida Connection</span>
-                <div class="flex items-center gap-2">
-                  <div class="w-2 h-2 rounded-full" :class="device.frida_available ? 'bg-green-500 status-indicator' : 'bg-red-500'"></div>
-                  <span :class="device.frida_available ? 'text-green-400' : 'text-red-400'">
-                    {{ device.frida_available ? 'Available' : 'Not Available' }}
-                  </span>
-                </div>
-              </div>
-              <!-- Mini ADB Diagnostics inside Connection Status -->
-              <div class="flex items-center justify-between text-sm">
-                <span class="text-slate-400">ADB Diagnostics</span>
-                <div class="flex items-center gap-2">
-                  <span class="text-white">
-                    {{ diagnosticResults && diagnosticResults.summary ? diagnosticResults.summary.passed : 0 }}/{{ diagnosticResults && diagnosticResults.tests ? diagnosticResults.tests.length : 0 }}
-                  </span>
-                  <button 
-                    type="button" 
-                    class="btn btn-xs btn-outline btn-primary"
-                    @click.prevent.stop="runDiagnostics"
-                    :disabled="runningDiagnostics"
-                  >
-                    <span v-if="runningDiagnostics" class="loading loading-spinner loading-xs"></span>
-                    {{ runningDiagnostics ? 'Testing...' : 'Run' }}
-                  </button>
-                  <button 
-                    type="button"
-                    class="btn btn-sm btn-ghost"
-                    @click.prevent.stop="showDiagnosticsModal = true"
-                    :disabled="!diagnosticResults"
-                  >
-                    Details
-                  </button>
-                </div>
-              </div>
-            </div>
-            <button 
-              type="button"
-              class="btn btn-sm btn-outline btn-primary mt-4 w-full"
-              @click.prevent.stop="reconnectDevice"
-              :disabled="reconnecting"
-            >
-              <span v-if="reconnecting" class="loading loading-spinner loading-xs"></span>
-              {{ reconnecting ? 'Reconnecting...' : 'Reconnect Device' }}
-            </button>
-          </div>
-        </div>
-
-        <!-- Frida Server Status -->
-        <div class="card card-compact bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20">
-          <div class="card-body">
-            <h3 class="card-title text-white mb-2">Frida Server Status</h3>
-            <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                <span class="text-slate-400">Installed Version</span>
-                <span class="text-white font-mono text-sm">
-                  {{ device.frida_server_version || 'Not Installed' }}
-                </span>
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-slate-400">Server Process</span>
-                <div class="flex items-center gap-2">
-                  <div class="w-2 h-2 rounded-full" :class="device.frida_server_running ? 'bg-green-500 status-indicator' : 'bg-gray-500'"></div>
-                  <span :class="device.frida_server_running ? 'text-green-400' : 'text-gray-400'">
-                    {{ device.frida_server_running ? 'Running' : 'Stopped' }}
-                  </span>
-                </div>
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-slate-400">Frida Connection</span>
-                <div class="flex items-center gap-2">
-                  <div class="w-2 h-2 rounded-full" :class="fridaConnected ? 'bg-green-500 status-indicator' : testingConnection ? 'bg-yellow-500 animate-pulse' : 'bg-gray-500'"></div>
-                  <span :class="fridaConnected ? 'text-green-400' : testingConnection ? 'text-yellow-400' : 'text-gray-400'">
-                    {{ fridaConnected ? 'Connected' : testingConnection ? 'Testing...' : 'Not Connected' }}
-                  </span>
-                </div>
-              </div>
-              <div v-if="lastConnectionTest" class="text-xs text-slate-500">
-                Last checked: {{ lastConnectionTest }}
-              </div>
-            </div>
-            <button 
-              type="button"
-              class="btn btn-sm btn-outline btn-primary mt-4 w-full"
-              @click.prevent.stop="refreshStatus"
-              :disabled="refreshing"
-            >
-              <svg v-if="!refreshing" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span v-if="refreshing" class="loading loading-spinner loading-xs"></span>
-              {{ refreshing ? 'Refreshing...' : 'Refresh Status' }}
-            </button>
-          </div>
-        </div>
-        <!-- Install + Push (Combined) - Compact Widget -->
-        <div class="card card-compact bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20">
-          <div class="card-body">
-            <h3 class="card-title text-white mb-2">Install Frida (Auto)</h3>
-            <div class="text-xs text-slate-400">
-              v{{ autoFridaVersion || 'Loading...' }} • {{ device ? getMappedArchitecture(device.architecture) : '...' }}
-            </div>
-            <div class="flex gap-2 mt-2">
-              <button 
-                type="button"
-                class="btn btn-sm btn-primary flex-1"
-                @click.prevent.stop="installFridaAuto"
-                :disabled="installing || !autoFridaVersion"
-              >
-                <span v-if="installing" class="loading loading-spinner loading-xs"></span>
-                {{ installing ? 'Installing...' : `Install Frida ${autoFridaVersion || ''}` }}
-              </button>
-              <button 
-                type="button"
-                class="btn btn-sm btn-ghost"
-                @click.prevent.stop="showInstallDetailsModal = true"
-                :disabled="!autoFridaVersion"
-              >
-                Details
-              </button>
-            </div>
-            <div class="border-t border-neutral-700 mt-3 pt-3">
-              <div class="text-xs text-white mb-2 font-semibold">Push Cached Server (Custom)</div>
-              <div class="flex gap-2">
-                <select 
-                  v-model="selectedCachedVersion" 
-                  class="select select-sm select-bordered bg-neutral-900 border-primary/30 focus:border-primary text-white flex-1"
-                  @focus="loadCachedVersions"
-                >
-                  <option value="" disabled>Select cached version</option>
-                  <option v-for="(architectures, version) in cachedVersions" :key="version" :value="version">
-                    {{ version }} ({{ architectures.join(', ') }})
-                  </option>
-                </select>
-                <button 
-                  type="button"
-                  class="btn btn-sm btn-primary"
-                  @click.prevent.stop="pushCachedServer"
-                  :disabled="pushing || !selectedCachedVersion"
-                >
-                  <span v-if="pushing" class="loading loading-spinner loading-xs"></span>
-                  {{ pushing ? 'Pushing...' : 'Push' }}
-                </button>
-              </div>
-              <div class="flex gap-2 mt-2">
-                <button 
-                  type="button"
-                  class="btn btn-sm btn-ghost"
-                  @click.prevent.stop="showPushDetailsModal = true"
-                >
-                  Details
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- Frida Controls - Compact Widget -->
-        <div class="card card-compact bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20">
-          <div class="card-body">
-            <h3 class="card-title text-white mb-2">Frida Controls</h3>
-            <div class="flex flex-wrap gap-2">
-              <button 
-                type="button"
-                class="btn btn-sm btn-success gap-2"
-                @click.prevent.stop="startFrida"
-                :disabled="starting || (device && device.frida_server_running)"
-              >
-                <span v-if="starting" class="loading loading-spinner loading-xs"></span>
-                <span v-else>Start</span>
-              </button>
-              <button 
-                type="button"
-                class="btn btn-sm btn-error gap-2"
-                @click.prevent.stop="stopFrida"
-                :disabled="stopping || (device && !device.frida_server_running)"
-              >
-                <span v-if="stopping" class="loading loading-spinner loading-xs"></span>
-                <span v-else>Stop</span>
-              </button>
-              <button 
-                type="button"
-                class="btn btn-sm btn-warning gap-2"
-                @click.prevent.stop="restartFrida"
-                :disabled="restarting"
-              >
-                <span v-if="restarting" class="loading loading-spinner loading-xs"></span>
-                <span v-else>Restart</span>
-              </button>
-            </div>
-            <div class="flex gap-2 mt-2">
-              <button 
-                type="button"
-                class="btn btn-sm btn-ghost"
-                @click.prevent.stop="showFridaControlsDetailsModal = true"
-              >
-                Details
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Frida Management (removed; content merged into summary row) -->
-
-      <!-- Discovery and Permissions (Compact, side-by-side) -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <!-- Frida Server Discovery & Cleanup -->
-        <div class="card card-compact bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20">
-          <div class="card-body py-4">
-            <div class="flex items-center justify-between mb-2">
-              <h3 class="card-title text-white">Frida Server Discovery</h3>
-              <button 
-                type="button"
-                class="btn btn-sm btn-outline btn-primary"
-                @click.prevent.stop="discoverServers"
-                :disabled="discovering"
-              >
-                <svg v-if="!discovering" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <span v-if="discovering" class="loading loading-spinner loading-xs"></span>
-                {{ discovering ? 'Scanning...' : 'Scan Device' }}
-              </button>
-            </div>
-            <div class="text-sm text-slate-300 font-semibold">
-              Servers: {{ discoveredServers.length }}
-              <span class="mx-1 text-slate-600">•</span>
-              Standard:
-              <span :class="permissionStatus.exists ? (permissionStatus.is_executable ? 'text-green-400' : 'text-red-400') : 'text-slate-500'">
-                {{ permissionStatus.exists ? (permissionStatus.is_executable ? 'Executable' : 'Not Executable') : 'Not Found' }}
-              </span>
-            </div>
-            <div class="collapse collapse-arrow mt-2">
-              <input type="checkbox" />
-              <div class="collapse-title text-sm">Details</div>
-              <div class="collapse-content">
-                <div v-if="discoveredServers.length === 0 && !discovering" class="text-center py-6 text-slate-400">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p>No Frida servers discovered yet</p>
-                </div>
-                <div v-else-if="discoveredServers.length > 0" class="space-y-2">
-              <div 
-                v-for="server in discoveredServers" 
-                :key="server.path"
-                class="flex items-center gap-3 p-3 bg-black/30 rounded-lg border"
-                :class="server.path === '/data/local/tmp/frida-server' ? 'border-primary/50' : 'border-neutral-700'"
-              >
-                <input 
-                  type="checkbox" 
-                  v-model="server.selected"
-                  class="checkbox checkbox-sm checkbox-primary"
-                />
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <code class="text-sm text-white font-mono break-all">{{ server.path }}</code>
-                    <span v-if="server.path === '/data/local/tmp/frida-server'" class="badge badge-xs badge-primary">Standard</span>
-                    <span v-if="server.is_executable" class="badge badge-xs badge-success">✓ Executable</span>
-                    <span v-else class="badge badge-xs badge-error">✗ Not Executable</span>
-                  </div>
-                  <div class="flex items-center gap-3 mt-2 text-xs flex-wrap">
-                    <span class="text-slate-400">
-                      <span class="text-slate-500">Permissions:</span> 
-                      <code class="text-primary ml-1">{{ server.permissions }}</code>
-                    </span>
-                    <span class="text-slate-400">
-                      <span class="text-slate-500">Size:</span> 
-                      <span class="text-white ml-1">{{ formatSize(server.size) }}</span>
-                    </span>
-                    <span v-if="server.version" class="text-slate-400">
-                      <span class="text-slate-500">Version:</span> 
-                      <code class="text-green-400 ml-1">{{ server.version }}</code>
-                    </span>
-                    <span v-else class="text-slate-400">
-                      <span class="text-slate-500">Version:</span> 
-                      <span class="text-red-400 ml-1">Unable to detect</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div class="flex gap-2 mt-2">
-                <button 
-                  type="button"
-                  class="btn btn-sm btn-error"
-                  @click.prevent.stop="showCleanupConfirmation"
-                  :disabled="!hasSelectedServers || cleaning"
-                >
-                  <svg v-if="!cleaning" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                  <span v-if="cleaning" class="loading loading-spinner loading-xs"></span>
-                  {{ cleaning ? 'Cleaning...' : 'Remove Selected' }}
-                </button>
-                <button 
-                  type="button"
-                  class="btn btn-sm btn-ghost"
-                  @click.prevent.stop="selectAllServers"
-                >
-                  Select All
-                </button>
-                <button 
-                  type="button"
-                  class="btn btn-sm btn-ghost"
-                  @click.prevent.stop="deselectAllServers"
-                >
-                  Deselect All
-                </button>
-              </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- Permission Management -->
-        <div class="card card-compact bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20">
-          <div class="card-body py-4">
-            <div class="flex items-start justify-between mb-2">
-              <div>
-                <h3 class="card-title text-white">Permission Management</h3>
-                <p class="text-sm text-slate-300 font-semibold mt-1">
-                  Manage and fix executable permissions for Frida servers discovered on this device.
-                </p>
-              </div>
-              <div
-                class="badge badge-sm"
-                :class="permissionStatus.exists ? (permissionStatus.is_executable ? 'badge-success' : 'badge-error') : 'badge-ghost text-slate-400'"
-              >
-                {{ permissionStatus.exists ? (permissionStatus.is_executable ? 'Executable' : 'Not Executable') : 'Not Found' }}
-              </div>
-            </div>
-            <!-- Summary details moved into collapsible section to keep header compact -->
-            <div class="collapse collapse-arrow mt-3">
-              <input type="checkbox" />
-              <div class="collapse-title text-sm">Details</div>
-              <div class="collapse-content">
-                <div class="space-y-3">
-                  <div class="flex items-center justify-between p-3 bg-black/30 rounded-lg border" :class="permissionStatus.is_executable ? 'border-green-500/30' : 'border-red-500/30'">
-                    <div class="flex items-center gap-3">
-                      <div v-if="permissionStatus.is_executable" class="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                      <div v-else class="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                      </div>
-                      <div class="flex-1 min-w-0">
-                        <div class="text-white font-medium font-mono text-sm break-all">/data/local/tmp/frida-server</div>
-                        <div class="text-sm text-slate-400 mt-1">
-                          <span v-if="permissionStatus.exists">
-                            Permissions: <code class="text-primary">{{ permissionStatus.permissions }}</code>
-                            <span v-if="permissionStatus.is_executable" class="ml-2 text-green-400">✓ Executable</span>
-                            <span v-else class="ml-2 text-red-400">✗ Not Executable</span>
-                          </span>
-                          <span v-else class="text-red-400">File does not exist</span>
-                        </div>
-                      </div>
-                    </div>
-                    <button 
-                      type="button"
-                      class="btn btn-sm btn-primary flex-shrink-0"
-                      @click.prevent.stop="fixPermissions"
-                      :disabled="fixingPermissions || !permissionStatus.exists || permissionStatus.is_executable"
-                    >
-                      <svg v-if="!fixingPermissions" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                      </svg>
-                      <span v-if="fixingPermissions" class="loading loading-spinner loading-xs"></span>
-                      {{ fixingPermissions ? 'Fixing...' : permissionStatus.is_executable ? 'Executable' : 'Fix Permissions' }}
-                    </button>
-                  </div>
-                  <div 
-                    v-if="discoveredServers.filter(s => s.path !== '/data/local/tmp/frida-server').length > 0" 
-                    class="collapse collapse-arrow mt-2"
-                  >
-                    <input type="checkbox" />
-                    <div class="collapse-title text-sm">Other Discovered Servers</div>
-                    <div class="collapse-content">
-                      <div 
-                        v-for="server in discoveredServers.filter(s => s.path !== '/data/local/tmp/frida-server')" 
-                        :key="server.path"
-                        class="flex items-center justify-between p-3 bg-black/30 rounded-lg border mb-2"
-                        :class="server.is_executable ? 'border-green-500/30' : 'border-red-500/30'"
-                      >
-                        <div class="flex-1 min-w-0">
-                          <div class="flex items-center gap-2 flex-wrap mb-1">
-                            <code class="text-sm text-white font-mono break-all">{{ server.path }}</code>
-                            <span v-if="server.is_executable" class="badge badge-xs badge-success">✓ Executable</span>
-                            <span v-else class="badge badge-xs badge-error">✗ Not Executable</span>
-                          </div>
-                          <div class="text-xs text-slate-400 flex items-center gap-3 flex-wrap">
-                            <span><code class="text-primary">{{ server.permissions }}</code></span>
-                            <span>{{ formatSize(server.size) }}</span>
-                            <span v-if="server.version" class="text-green-400">v{{ server.version }}</span>
-                            <span v-else class="text-red-400">Version unknown</span>
-                          </div>
-                        </div>
-                        <button 
-                          v-if="!server.is_executable"
-                          type="button"
-                          class="btn btn-xs btn-primary flex-shrink-0 ml-2"
-                          @click.prevent.stop="fixServerPermissions(server.path)"
-                          :disabled="fixingPermissions"
-                        >
-                          Fix
-                        </button>
-                        <span v-else class="badge badge-success badge-sm flex-shrink-0 ml-2">Ready</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ADB Diagnostics removed; now integrated into Connection Status with modal details -->
-
-      <!-- Cleanup Confirmation Modal -->
-      <div v-if="showCleanupModal" class="modal modal-open">
-        <div class="modal-box bg-neutral-900 border border-primary/30">
-          <h3 class="font-bold text-lg text-white mb-4">Confirm Cleanup</h3>
-          <p class="text-slate-300 mb-4">
-            Are you sure you want to remove {{ selectedServerPaths.length }} Frida server(s)?
-          </p>
-          <div class="bg-black/30 p-3 rounded mb-4 max-h-40 overflow-y-auto">
-            <div v-for="path in selectedServerPaths" :key="path" class="text-sm text-slate-400 mb-1">
-              <code>{{ path }}</code>
-            </div>
-          </div>
-          <div class="modal-action">
-            <button type="button" class="btn btn-ghost" @click="showCleanupModal = false">Cancel</button>
-            <button type="button" class="btn btn-error" @click.prevent.stop="cleanupServers">Remove</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Diagnostics Details Modal -->
-      <div v-if="showDiagnosticsModal" class="modal modal-open">
-        <div class="modal-box bg-neutral-900 border border-primary/30 max-w-3xl">
-          <h3 class="font-bold text-lg text-white mb-2">ADB Diagnostics</h3>
-          <div class="text-sm text-slate-400 mb-3">
-            <template v-if="diagnosticResults && diagnosticResults.summary">
-              {{ diagnosticResults.summary.passed }} passed • {{ diagnosticResults.summary.failed }} failed
-            </template>
-            <template v-else>
-              No diagnostic results yet
-            </template>
-          </div>
-          <div class="max-h-[60vh] overflow-y-auto pr-1">
-            <div v-if="diagnosticResults" class="space-y-2">
-              <div 
-                v-for="test in diagnosticResults.tests" 
-                :key="test.name"
-                class="collapse collapse-arrow bg-black/30 border"
-                :class="{
-                  'border-green-500/30': test.status === 'pass',
-                  'border-yellow-500/30': test.status === 'warning',
-                  'border-red-500/30': test.status === 'fail'
-                }"
-              >
-                <input type="checkbox" />
-                <div class="collapse-title flex items-center gap-3">
-                  <svg v-if="test.status === 'pass'" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <svg v-else-if="test.status === 'warning'" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div class="flex-1">
-                    <div class="font-medium text-white">{{ test.name }}</div>
-                    <div class="text-xs text-slate-400">{{ test.message }}</div>
-                  </div>
-                </div>
-                <div class="collapse-content">
-                  <div class="text-sm text-slate-300 mt-2">
-                    <p class="mb-2">{{ test.description }}</p>
-                    <div v-if="Object.keys(test.details).length > 0" class="bg-black/50 p-3 rounded">
-                      <div v-for="(value, key) in test.details" :key="key" class="mb-1">
-                        <span class="text-slate-400">{{ key }}:</span>
-                        <span class="text-white ml-2">{{ value }}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div v-else class="text-center py-6 text-slate-400">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-              <p>No diagnostic results yet</p>
-            </div>
-          </div>
-          <div class="modal-action">
-            <button type="button" class="btn btn-ghost" @click="showDiagnosticsModal = false">Close</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Log Viewer -->
-      <LogViewer v-if="device" :device-id="device.serial" class="mb-6" />
     </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import LogViewer from '../components/LogViewer.vue'
+import TabNavigation from '../components/TabNavigation.vue'
+import DeviceTab from './DeviceTab.vue'
+import ProcessesTab from './ProcessesTab.vue'
+import PackagesTab from './PackagesTab.vue'
+import FilesTab from './FilesTab.vue'
+import WorkshopTab from './WorkshopTab.vue'
 import { useToast } from '../composables/useToast'
 
 export default {
   name: 'DeviceDetails',
   components: {
-    LogViewer
+    TabNavigation,
+    DeviceTab,
+    ProcessesTab,
+    PackagesTab,
+    FilesTab,
+    WorkshopTab
   },
   props: {
     selectedFridaVersion: {
@@ -717,6 +147,7 @@ export default {
   },
   setup(props) {
     const route = useRoute()
+    const router = useRouter()
     const toast = useToast()
     const device = ref(null)
     const loading = ref(true)
@@ -730,13 +161,8 @@ export default {
     const restarting = ref(false)
     const cachedVersions = ref({})
     const selectedCachedVersion = ref('')
-    const statusMessage = ref('')
-    const statusType = ref('success')
     const autoFridaVersion = ref('')
     const autoFridaArch = ref('')
-    
-    // Expose selectedFridaVersion from props for template access
-    const { selectedFridaVersion } = props
     
     const discovering = ref(false)
     const discoveredServers = ref([])
@@ -774,13 +200,37 @@ export default {
       return discoveredServers.value.filter(s => s.selected).map(s => s.path)
     })
 
-    const showStatus = (message, type = 'success') => {
-      statusMessage.value = message
-      statusType.value = type
-      setTimeout(() => {
-        statusMessage.value = ''
-      }, 5000)
+    const tabs = [
+      { name: 'device', label: 'Device' },
+      { name: 'processes', label: 'Processes' },
+      { name: 'packages', label: 'Packages' },
+      { name: 'files', label: 'Files' },
+      { name: 'workshop', label: 'Workshop' }
+    ]
+
+    const activeTab = ref(route.query.tab || 'device')
+    
+    const currentTabComponent = computed(() => {
+      const componentMap = {
+        device: DeviceTab,
+        processes: ProcessesTab,
+        packages: PackagesTab,
+        files: FilesTab,
+        workshop: WorkshopTab
+      }
+      return componentMap[activeTab.value] || DeviceTab
+    })
+
+    const handleTabChange = (tabName) => {
+      activeTab.value = tabName
+      router.push({ query: { ...route.query, tab: tabName } })
     }
+
+    watch(() => route.query.tab, (newTab) => {
+      if (newTab && newTab !== activeTab.value) {
+        activeTab.value = newTab
+      }
+    })
 
     const loadDeviceDetails = async (showLoading = true) => {
       try {
@@ -810,10 +260,10 @@ export default {
         reconnecting.value = true
         const response = await axios.post(`http://localhost:8000/api/devices/${deviceId.value}/connect`)
         adbConnected.value = response.data.connected
-        showStatus(response.data.message, response.data.connected ? 'success' : 'error')
+        toast[response.data.connected ? 'success' : 'error'](response.data.message)
         await loadDeviceDetails(false)
       } catch (err) {
-        showStatus('Failed to reconnect device', 'error')
+        toast.error('Failed to reconnect device')
       } finally {
         reconnecting.value = false
       }
@@ -835,7 +285,6 @@ export default {
         const response = await axios.get(`http://localhost:8000/api/devices/${deviceId.value}/frida/recommended`)
         autoFridaVersion.value = response.data.version
         autoFridaArch.value = response.data.architecture
-        console.log(`Recommended Frida version: ${autoFridaVersion.value} for ${autoFridaArch.value}`)
       } catch (err) {
         console.error('Failed to load recommended version:', err)
         autoFridaVersion.value = 'Unable to determine'
@@ -855,38 +304,10 @@ export default {
           `http://localhost:8000/api/devices/${deviceId.value}/frida/install`,
           { version: autoFridaVersion.value }
         )
-        showStatus(response.data.message, 'success')
         toast.success(response.data.message, 'Frida Installation')
         await loadDeviceDetails(false)
       } catch (err) {
         const errorMsg = err.response?.data?.detail || 'Failed to install Frida server'
-        showStatus(errorMsg, 'error')
-        toast.error(errorMsg, 'Installation Failed')
-      } finally {
-        installing.value = false
-      }
-    }
-
-    const installFrida = async () => {
-      if (!props.selectedFridaVersion) {
-        showStatus('Please select a Frida version from the top menu', 'error')
-        toast.error('Please select a Frida version from the top menu', 'Installation Failed')
-        return
-      }
-
-      try {
-        installing.value = true
-        toast.info(`Installing Frida ${props.selectedFridaVersion}...`, 'Frida Installation')
-        const response = await axios.post(
-          `http://localhost:8000/api/devices/${deviceId.value}/frida/install`,
-          { version: props.selectedFridaVersion }
-        )
-        showStatus(response.data.message, 'success')
-        toast.success(response.data.message, 'Frida Installation')
-        await loadDeviceDetails(false)
-      } catch (err) {
-        const errorMsg = err.response?.data?.detail || 'Failed to install Frida server'
-        showStatus(errorMsg, 'error')
         toast.error(errorMsg, 'Installation Failed')
       } finally {
         installing.value = false
@@ -902,7 +323,7 @@ export default {
         const fridaArch = mapArchitecture(device.value.architecture)
         
         if (!architectures.includes(fridaArch)) {
-          showStatus(`No cached binary for architecture ${fridaArch}`, 'error')
+          toast.error(`No cached binary for architecture ${fridaArch}`)
           return
         }
 
@@ -913,10 +334,10 @@ export default {
             architecture: fridaArch
           }
         )
-        showStatus(response.data.message, 'success')
+        toast.success(response.data.message)
         await loadDeviceDetails(false)
       } catch (err) {
-        showStatus(err.response?.data?.detail || 'Failed to push Frida server', 'error')
+        toast.error(err.response?.data?.detail || 'Failed to push Frida server')
       } finally {
         pushing.value = false
       }
@@ -927,12 +348,10 @@ export default {
         starting.value = true
         toast.info('Starting Frida server...', 'Frida Server')
         const response = await axios.post(`http://localhost:8000/api/devices/${deviceId.value}/frida/start`)
-        showStatus(response.data.message, 'success')
         toast.success(response.data.message, 'Frida Server')
         await loadDeviceDetails(false)
       } catch (err) {
         const errorMsg = err.response?.data?.detail || 'Failed to start Frida server'
-        showStatus(errorMsg, 'error')
         toast.error(errorMsg, 'Start Failed')
       } finally {
         starting.value = false
@@ -944,12 +363,10 @@ export default {
         stopping.value = true
         toast.info('Stopping Frida server...', 'Frida Server')
         const response = await axios.post(`http://localhost:8000/api/devices/${deviceId.value}/frida/stop`)
-        showStatus(response.data.message, 'success')
         toast.success(response.data.message, 'Frida Server')
         await loadDeviceDetails(false)
       } catch (err) {
         const errorMsg = err.response?.data?.detail || 'Failed to stop Frida server'
-        showStatus(errorMsg, 'error')
         toast.error(errorMsg, 'Stop Failed')
       } finally {
         stopping.value = false
@@ -960,10 +377,10 @@ export default {
       try {
         restarting.value = true
         const response = await axios.post(`http://localhost:8000/api/devices/${deviceId.value}/frida/restart`)
-        showStatus(response.data.message, 'success')
+        toast.success(response.data.message)
         await loadDeviceDetails(false)
       } catch (err) {
-        showStatus(err.response?.data?.detail || 'Failed to restart Frida server', 'error')
+        toast.error(err.response?.data?.detail || 'Failed to restart Frida server')
       } finally {
         restarting.value = false
       }
@@ -978,28 +395,6 @@ export default {
         'x86_64': 'x86_64'
       }
       return mapping[androidAbi] || androidAbi
-    }
-
-    const getMappedArchitecture = (androidAbi) => {
-      return mapArchitecture(androidAbi)
-    }
-
-    const getFridaBinaryPath = () => {
-      if (!device.value || !autoFridaVersion.value) {
-        return 'Loading...'
-      }
-      
-      const arch = getMappedArchitecture(device.value.architecture)
-      return `backend/frida_servers/${autoFridaVersion.value}/${arch}/frida-server`
-    }
-
-    const getFridaDownloadUrl = () => {
-      if (!device.value || !autoFridaVersion.value) {
-        return 'Loading...'
-      }
-      
-      const arch = getMappedArchitecture(device.value.architecture)
-      return `https://github.com/frida/frida/releases/download/${autoFridaVersion.value}/frida-server-${autoFridaVersion.value}-android-${arch}.xz`
     }
 
     const fixServerPermissions = async (path) => {
@@ -1021,28 +416,10 @@ export default {
       }
     }
 
-    const getDeviceColor = (type) => {
-      if (type === 'emulator') return 'bg-gradient-to-br from-[#7100d0] to-purple-700'
-      if (type === 'physical') return 'bg-gradient-to-br from-[#7100d0] to-black'
-      return 'bg-gradient-to-br from-slate-500 to-slate-600'
-    }
-
     const getStatusBadge = (state) => {
       if (state === 'online') return 'badge-success'
       if (state === 'error') return 'badge-error'
       return 'badge-warning'
-    }
-
-    const formatSize = (size) => {
-      if (!size || size === 'unknown') return 'Unknown'
-      
-      const bytes = parseInt(size)
-      if (isNaN(bytes)) return size
-      
-      if (bytes < 1024) return `${bytes} B`
-      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-      if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-      return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
     }
 
     const discoverServers = async () => {
@@ -1051,7 +428,6 @@ export default {
         const response = await axios.get(`http://localhost:8000/api/devices/${deviceId.value}/frida/discover`)
         discoveredServers.value = response.data.servers.map(s => ({ ...s, selected: false }))
         
-        // Update permission status for standard location if found
         const standardServer = discoveredServers.value.find(s => s.path === '/data/local/tmp/frida-server')
         if (standardServer) {
           permissionStatus.value = {
@@ -1193,12 +569,10 @@ export default {
     }
 
     const startConnectionTracking = () => {
-      // Poll device status every 15 seconds
       processCheckInterval = setInterval(async () => {
         await loadDeviceDetails(false)
       }, 15000)
       
-      // Test Frida connection every 30 seconds if server is running
       connectionCheckInterval = setInterval(async () => {
         if (device.value?.frida_server_running) {
           await testFridaConnection()
@@ -1250,11 +624,7 @@ export default {
       restarting,
       cachedVersions,
       selectedCachedVersion,
-      selectedFridaVersion,
       autoFridaVersion,
-      autoFridaArch,
-      statusMessage,
-      statusType,
       discovering,
       discoveredServers,
       cleaning,
@@ -1272,11 +642,13 @@ export default {
       fridaConnected,
       testingConnection,
       lastConnectionTest,
+      tabs,
+      activeTab,
+      currentTabComponent,
+      handleTabChange,
       refreshStatus,
       reconnectDevice,
       loadCachedVersions,
-      loadRecommendedVersion,
-      installFrida,
       installFridaAuto,
       pushCachedServer,
       startFrida,
@@ -1290,16 +662,9 @@ export default {
       checkPermissions,
       fixPermissions,
       runDiagnostics,
-      testFridaConnection,
-      getMappedArchitecture,
-      getFridaBinaryPath,
-      getFridaDownloadUrl,
       fixServerPermissions,
-      formatSize,
-      getDeviceColor,
       getStatusBadge
     }
   }
 }
 </script>
-

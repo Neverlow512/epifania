@@ -28,15 +28,15 @@ This document outlines the strategic expansion of Epifania from a Frida server m
 
 ### Tab Layout
 
-The DeviceDetails page will be restructured with a horizontal tab navigation:
+The DeviceDetails page has been restructured with a horizontal tab navigation:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  ← Back to Dashboard                                         │
 ├─────────────────────────────────────────────────────────────┤
-│  Google Pixel 3   │  online  │  SDK 28  │  Root ✓          │ ← Compact header
+│  Google Pixel 3   │  Emulator  │  online  │  SDK 28  │ Root ✓│ ← Compact header
 ├─────────────────────────────────────────────────────────────┤
-│ [Device] [Processes] [Applications] [Workshop] [Files]      │ ← Tab bar
+│ [Device] [Processes] [Packages] [Files] [Workshop]          │ ← Tab bar
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │              Active Tab Content                              │
@@ -45,17 +45,17 @@ The DeviceDetails page will be restructured with a horizontal tab navigation:
 ```
 
 **Tab Definitions:**
-- **Device** - Device management (current Overview content: specs, Frida controls, diagnostics)
-- **Processes** - Runtime process monitoring and analysis
-- **Applications** - Installed application catalog and management
-- **Workshop** - Active analysis workspace (Coming Soon)
+- **Device** - Device management (Frida server controls, diagnostics, discovery, permissions, logs)
+- **Processes** - Runtime process monitoring and analysis (Coming Soon)
+- **Packages** - Installed package catalog and management (Coming Soon)
 - **Files** - File system browser (Coming Soon)
+- **Workshop** - Active analysis workspace (Coming Soon)
 
-**Device Header Simplification:**
-The detailed device specification cards currently displayed will move into the Device tab. The header will show only essential info: device name, connection status, SDK version, root status.
+**Device Header Implementation:**
+The header displays essential device information in a compact single line: device name, device type badge (Emulator/Physical), connection status badge, SDK version, and root status. The detailed device specifications and all Frida management controls remain in the Device tab.
 
-**Placeholder Removal:**
-The current "Processes Coming soon" and "Applications Coming soon" cards in the Device tab will be removed entirely once the respective tabs are implemented.
+**Tab Structure:**
+The tab navigation uses a reusable `TabNavigation` component that accepts tab definitions and emits change events. URL query parameters (`?tab=processes`) enable deep linking to specific tabs. All placeholder tabs display a centered informational message with an icon and description of the planned functionality.
 
 ---
 
@@ -263,37 +263,37 @@ When you click a process row, it expands to show:
 
 ---
 
-## Tab 2: Applications
+## Tab 2: Packages
 
 ### Purpose
 
-Provide a comprehensive catalog of all installed applications, serve as the primary target selection interface for analysis, and manage application lifecycle (install, uninstall, launch, stop, clear data).
+Provide a comprehensive catalog of all installed packages, serve as the primary target selection interface for analysis, and manage package lifecycle (install, uninstall, launch, stop, clear data).
 
 ### Core Concept
 
-This is an **inventory and control panel** for applications. Unlike Processes (which shows what's running now), this shows what's installed (whether running or not). Think of it as a combination of the Android Settings app, APK analyzer, and launch pad. Data updates on-demand, not continuously.
+This is an **inventory and control panel** for packages. Unlike Processes (which shows what's running now), this shows what's installed (whether running or not). Think of it as a combination of the Android Settings app, APK analyzer, and launch pad. Data updates on-demand, not continuously.
 
 ### Visual Layout
 
 **Top Section: Stats Bar**
-- Total installed apps (with breakdown: user vs system)
-- Currently running apps count
-- Total storage used by apps
+- Total installed packages (with breakdown: user vs system)
+- Currently running packages count
+- Total storage used by packages
 - Last scanned timestamp
 
 **Control Bar:**
-- Search input (filter by app name or package identifier)
-- Category filter: All | User Apps | System Apps | Running Only | Recently Updated | Recently Installed
+- Search input (filter by package name or identifier)
+- Category filter: All | User Packages | System Packages | Running Only | Recently Updated | Recently Installed
 - Sort dropdown: Name (A-Z) | Name (Z-A) | Install Date | Size | Last Updated
 - View mode toggle: Cards / List
-- Scan button (refresh app list from device)
+- Scan button (refresh package list from device)
 
-**Main Content: Application Grid/List**
+**Main Content: Package Grid/List**
 
 **Card View Mode:**
-Each app displayed as a card with:
-- App icon (extracted from APK or default icon)
-- App name (bold, prominent)
+Each package displayed as a card with:
+- Package icon (extracted from APK or default icon)
+- Package name (bold, prominent)
 - Package identifier (small, monospace, gray)
 - Version number
 - Running status indicator (green dot if running, gray if not)
@@ -304,7 +304,7 @@ Each app displayed as a card with:
 Compact table with columns:
 - Icon (small thumbnail)
 - Name
-- Package
+- Package ID
 - Version
 - Size
 - Install Date
@@ -314,22 +314,22 @@ Compact table with columns:
 **Card/List Behaviors:**
 - Click anywhere on card/row (except action buttons) to open details modal
 - Hover shows quick action buttons
-- Running apps have subtle green accent border
-- System apps have gray tint to differentiate from user apps
+- Running packages have subtle green accent border
+- System packages have gray tint to differentiate from user packages
 
-**Application Details Modal:**
-When you click an app, opens a modal with comprehensive information:
+**Package Details Modal:**
+When you click a package, opens a modal with comprehensive information:
 
 **Modal Structure:**
-- Header: App icon, name, package, version
+- Header: Package icon, name, package ID, version
 - Sub-tabs within modal: Overview | Permissions | Files | Activity | APK Info
 
 **Overview Tab:**
 - Version name and code
 - Install date and last update date
 - Target SDK version and minimum SDK version
-- Size breakdown: App (MB) + Data (MB) + Cache (MB)
-- Signature hash (for identifying repackaged apps)
+- Size breakdown: Package (MB) + Data (MB) + Cache (MB)
+- Signature hash (for identifying repackaged packages)
 - Installation source (Play Store, ADB, Unknown)
 - Running status: Not Running / Running (PID: XXXX - clickable to jump to Processes tab)
 - Data directory path (clickable to jump to Files tab)
@@ -341,7 +341,7 @@ When you click an app, opens a modal with comprehensive information:
 - Highlight dangerous permissions in red
 
 **Files Tab (within modal):**
-- Quick view of app's data directory structure
+- Quick view of package's data directory structure
 - File tree showing: databases, shared_prefs, files, cache
 - File actions: Download, Delete, View (for text files)
 - SQLite database preview (table list for .db files)
@@ -361,18 +361,18 @@ When you click an app, opens a modal with comprehensive information:
 - Resources: Layout files, assets, raw files (counts)
 
 **Action Buttons (in modal footer):**
-- Launch App
-- Stop App (if running)
-- Clear App Data
+- Launch Package
+- Stop Package (if running)
+- Clear Package Data
 - Clear Cache
-- Uninstall App
+- Uninstall Package
 - Send to Workshop (Spawn)
 - Send to Workshop (Attach - if running)
 - Export APK
 
 ### Functionality Deep Dive
 
-#### Application Discovery
+#### Package Discovery
 
 **Backend Requirements:**
 - New endpoint: `GET /api/devices/{device_id}/packages`
@@ -395,9 +395,9 @@ When you click an app, opens a modal with comprehensive information:
 - Frontend caches in browser (via standard HTTP cache headers)
 - Fallback to default Android icon if extraction fails
 
-#### Application Actions
+#### Package Actions
 
-**Launch App:**
+**Launch Package:**
 - Backend endpoint: `POST /api/devices/{device_id}/packages/{package_name}/launch`
 - Uses ADB command: `monkey -p {package_name} -c android.intent.category.LAUNCHER 1`
 - Alternative: `am start -n {package_name}/{main_activity}`
@@ -405,7 +405,7 @@ When you click an app, opens a modal with comprehensive information:
 - Frontend shows toast notification
 - Updates app status to "Running" after 2s delay
 
-**Stop App:**
+**Stop Package:**
 - Backend endpoint: `POST /api/devices/{device_id}/packages/{package_name}/stop`
 - Uses ADB command: `am force-stop {package_name}`
 - Requires confirmation modal (warn about data loss)
@@ -423,12 +423,12 @@ When you click an app, opens a modal with comprehensive information:
 - Less destructive than clearing data
 - No confirmation needed
 
-**Uninstall App:**
+**Uninstall Package:**
 - Backend endpoint: `POST /api/devices/{device_id}/packages/{package_name}/uninstall`
 - Uses ADB command: `pm uninstall {package_name}`
-- Shows confirmation modal: "Permanently remove {app_name}?"
-- Removes app from list on success
-- Cannot uninstall system apps without root
+- Shows confirmation modal: "Permanently remove {package_name}?"
+- Removes package from list on success
+- Cannot uninstall system packages without root
 
 **Extract APK:**
 - Backend endpoint: `GET /api/devices/{device_id}/packages/{package_name}/apk`
@@ -438,11 +438,11 @@ When you click an app, opens a modal with comprehensive information:
 - Shows progress indicator for large APKs
 
 **Send to Workshop:**
-- Captures app context (package name, version, running status)
+- Captures package context (package name, version, running status)
 - Navigates to Workshop tab
 - Pre-fills target selector with package name
-- If app is running: pre-selects "Attach" mode, shows PID
-- If app is not running: pre-selects "Spawn" mode
+- If package is running: pre-selects "Attach" mode, shows PID
+- If package is not running: pre-selects "Spawn" mode
 - User can then configure scripts and inject
 
 #### Detailed Package Information
@@ -487,14 +487,14 @@ When you click an app, opens a modal with comprehensive information:
 
 **Search Implementation:**
 - Frontend-side filtering for instant results
-- Search matches: App name (case-insensitive), Package identifier
+- Search matches: Package name (case-insensitive), Package identifier
 - Highlight matched text in results
 - Show "No results" message if no matches
 
 **Category Filters:**
-- User Apps: Filter where package doesn't start with "com.android", "android", "com.google" (configurable)
-- System Apps: Opposite of User Apps
-- Running Only: Filter where app has active process (cross-reference with Processes data)
+- User Packages: Filter where package doesn't start with "com.android", "android", "com.google" (configurable)
+- System Packages: Opposite of User Packages
+- Running Only: Filter where package has active process (cross-reference with Processes data)
 - Recently Updated: Filter where update date is within last 7 days
 - Recently Installed: Filter where install date is within last 7 days
 
@@ -506,10 +506,10 @@ When you click an app, opens a modal with comprehensive information:
 ### User Workflows
 
 **Workflow 1: Target Selection for Analysis**
-1. User opens Applications tab
+1. User opens Packages tab
 2. Searches for "banking" in search bar
-3. Sees 5 banking apps installed
-4. Clicks on "Chase Mobile" card
+3. Sees 5 banking packages installed
+4. Clicks on "com.chase.mobile" card
 5. Reviews permissions (notices SMS and Location access)
 6. Checks "Activity" sub-tab to see exported components
 7. Clicks "Send to Workshop (Spawn)"
@@ -517,10 +517,10 @@ When you click an app, opens a modal with comprehensive information:
 9. Loads SSL pinning bypass script
 10. Clicks "Inject & Run" to start analysis
 
-**Workflow 2: App Data Inspection**
-1. User has been analyzing an app, wants to see stored data
-2. Opens Applications tab
-3. Clicks on the app card
+**Workflow 2: Package Data Inspection**
+1. User has been analyzing a package, wants to see stored data
+2. Opens Packages tab
+3. Clicks on the package card
 4. Switches to "Files" sub-tab in modal
 5. Sees databases directory with "user.db"
 6. Clicks on "user.db"
@@ -530,49 +530,49 @@ When you click an app, opens a modal with comprehensive information:
 10. Downloads database for reporting
 
 **Workflow 3: Clean Analysis Environment**
-1. User has run analysis on an app, wants to re-test from clean state
-2. Opens Applications tab
-3. Finds the app in list
+1. User has run analysis on a package, wants to re-test from clean state
+2. Opens Packages tab
+3. Finds the package in list
 4. Clicks "Clear Data" action
 5. Confirms in modal
-6. App data is wiped
+6. Package data is wiped
 7. Clicks "Send to Workshop (Spawn)"
-8. Re-runs analysis with fresh app state
+8. Re-runs analysis with fresh package state
 
 **Workflow 4: APK Collection**
-1. User wants to collect APKs of all user apps for offline analysis
-2. Opens Applications tab
-3. Filters by "User Apps"
-4. For each app of interest, clicks to open modal
+1. User wants to collect APKs of all user packages for offline analysis
+2. Opens Packages tab
+3. Filters by "User Packages"
+4. For each package of interest, clicks to open modal
 5. Goes to "APK Info" tab
 6. Clicks "Extract APK"
 7. APK downloads to host machine
-8. Repeats for other apps
+8. Repeats for other packages
 
 **Workflow 5: Finding Exported Components**
-1. User is looking for attack surface in apps
-2. Opens Applications tab
-3. Iterates through apps
-4. For each app, opens modal and goes to "Activity" tab
+1. User is looking for attack surface in packages
+2. Opens Packages tab
+3. Iterates through packages
+4. For each package, opens modal and goes to "Activity" tab
 5. Scans for exported components (highlighted in red/orange)
-6. Notes apps with exported Activities or Services
+6. Notes packages with exported Activities or Services
 7. Tests those components for vulnerabilities
 
 ### Design Considerations
 
 **Performance:**
-- Initial app scan can take 10-30 seconds for 100+ apps
+- Initial package scan can take 10-30 seconds for 100+ packages
 - Show loading skeleton during initial fetch
 - Once loaded, all operations should be instant (data is in memory)
-- Lazy-load app icons (load as user scrolls)
-- Virtual scrolling if more than 200 apps
+- Lazy-load package icons (load as user scrolls)
+- Virtual scrolling if more than 200 packages
 
 **Visual Design:**
 - Card view is visually appealing, good for browsing
-- List view is efficient, good for scanning many apps
-- Use app's actual icon for familiarity
+- List view is efficient, good for scanning many packages
+- Use package's actual icon for familiarity
 - Color-code status: Green (running), Gray (not running), Red (crashed/disabled)
-- Badge overlays: System app badge, Debuggable badge, Root-required badge
+- Badge overlays: System package badge, Debuggable badge, Root-required badge
 
 **Data Freshness:**
 - Show "Last scanned" timestamp prominently
@@ -588,15 +588,15 @@ When you click an app, opens a modal with comprehensive information:
 - Sticky footer with action buttons
 
 **Accessibility:**
-- Keyboard navigation through app grid/list
+- Keyboard navigation through package grid/list
 - Clear focus indicators
 - Action buttons have descriptive aria-labels
 - Status announced to screen readers
 
 **Error Handling:**
 - If APK extraction fails, show clear error message
-- If app launch fails, suggest checking app is installed correctly
-- If uninstall fails (system app), explain why
+- If package launch fails, suggest checking package is installed correctly
+- If uninstall fails (system package), explain why
 - Network timeout handling for long operations
 
 ---
@@ -708,12 +708,12 @@ Use existing log_streamer infrastructure:
    - Props: device, pid
    - Features: Tabbed modal, lazy data loading, real-time updates
 
-4. **ApplicationGrid.vue** - App grid/list view
-   - Props: applications (array), viewMode (cards/list)
-   - Emits: app-selected, app-action (launch, stop, etc.)
+4. **PackageGrid.vue** - Package grid/list view
+   - Props: packages (array), viewMode (cards/list)
+   - Emits: package-selected, package-action (launch, stop, etc.)
    - Features: Virtual scrolling, lazy icon loading, filtering
 
-5. **ApplicationModal.vue** - App detail modal
+5. **PackageModal.vue** - Package detail modal
    - Props: device, package
    - Features: Tabbed modal, permission viewer, file browser, APK info
 
@@ -729,10 +729,10 @@ Use existing log_streamer infrastructure:
 - State: processes (array), loading, error, lastUpdate
 - Polling logic with cleanup on unmount
 
-**Composable: useApplications.js**
-- Manages application data
-- Methods: fetchApplications(), launchApp(), stopApp(), clearData(), uninstallApp()
-- State: applications (array), loading, error, lastUpdate
+**Composable: usePackages.js**
+- Manages package data
+- Methods: fetchPackages(), launchPackage(), stopPackage(), clearData(), uninstallPackage()
+- State: packages (array), loading, error, lastUpdate
 - Cache management
 
 ### Routing Updates
@@ -741,8 +741,10 @@ Update `frontend/src/router/index.js`:
 
 Add query parameter support for tabs:
 - `/device/:id?tab=processes`
-- `/device/:id?tab=applications`
-- Default tab: "device" (current overview)
+- `/device/:id?tab=packages`
+- `/device/:id?tab=files`
+- `/device/:id?tab=workshop`
+- Default tab: "device"
 
 This allows deep linking: "Send to Workshop" can link to `/device/emulator-5554?tab=workshop&target=com.example.app`
 
@@ -751,13 +753,13 @@ This allows deep linking: "Send to Workshop" can link to `/device/emulator-5554?
 **Current structure:**
 - Single monolithic component with all content
 
-**New structure:**
-- DeviceDetails.vue becomes tab container
-- Extract current content into DeviceTab.vue
-- Create ProcessesTab.vue
-- Create ApplicationsTab.vue
-- Create WorkshopTab.vue (placeholder for now)
-- Create FilesTab.vue (placeholder for now)
+**New structure (IMPLEMENTED):**
+- DeviceDetails.vue is now the tab container
+- Current Frida management content extracted into DeviceTab.vue
+- ProcessesTab.vue created (placeholder)
+- PackagesTab.vue created (placeholder)
+- FilesTab.vue created (placeholder)
+- WorkshopTab.vue created (placeholder)
 
 **DeviceDetails.vue responsibilities:**
 - Render compact device header
@@ -837,16 +839,17 @@ Subtle, purposeful animations:
 - Implement basic package listing endpoint
 - Add API endpoints to `backend/main.py`
 
-**Frontend:**
-- Create TabNavigation component
-- Restructure DeviceDetails.vue with tab support
-- Create placeholder tab components (empty shells)
-- Implement tab switching logic and routing
+**Frontend (COMPLETED):**
+- ✓ Created TabNavigation component
+- ✓ Restructured DeviceDetails.vue with tab support
+- ✓ Created placeholder tab components (ProcessesTab, PackagesTab, FilesTab, WorkshopTab)
+- ✓ Implemented tab switching logic and routing with query parameters
 
-**Deliverable:** 
-- Tab navigation works, you can switch between tabs
-- Processes tab shows basic process list (no graphs yet)
-- Applications tab shows basic app list (no icons yet)
+**Deliverable (COMPLETED):** 
+- ✓ Tab navigation works, you can switch between tabs
+- ✓ URL query parameters enable deep linking
+- ✓ Device tab contains all Frida management functionality
+- ✓ Placeholder tabs ready for implementation
 
 ### Phase 2: Processes Tab (Week 2)
 
@@ -868,7 +871,7 @@ Subtle, purposeful animations:
 - Can view process details, kill processes
 - Graphs show resource usage trends
 
-### Phase 3: Applications Tab (Week 3)
+### Phase 3: Packages Tab (Week 3)
 
 **Backend:**
 - Implement package details endpoint
@@ -878,16 +881,16 @@ Subtle, purposeful animations:
 - Add file listing and database schema endpoints
 
 **Frontend:**
-- Build ApplicationGrid component (card + list views)
+- Build PackageGrid component (card + list views)
 - Add filtering, sorting, search
-- Implement application actions (launch, stop, etc.)
-- Create ApplicationModal with sub-tabs
+- Implement package actions (launch, stop, etc.)
+- Create PackageModal with sub-tabs
 - Implement permission viewer, file browser, APK info
 
 **Deliverable:**
-- Fully functional Applications tab with comprehensive app management
-- Can launch apps, view details, extract APKs
-- Modal shows all relevant app information
+- Fully functional Packages tab with comprehensive package management
+- Can launch packages, view details, extract APKs
+- Modal shows all relevant package information
 
 ### Phase 4: Polish and Integration (Week 4)
 
@@ -906,9 +909,9 @@ Subtle, purposeful animations:
 - Mobile responsive adjustments
 
 **Deliverable:**
-- Production-ready Processes and Applications tabs
+- Production-ready Processes and Packages tabs
 - Smooth user experience with proper feedback
-- Good performance even with many processes/apps
+- Good performance even with many processes/packages
 
 ---
 
@@ -982,16 +985,16 @@ Subtle, purposeful animations:
 - User can identify and kill problematic processes easily
 - Activity feed captures all lifecycle events
 
-**For Applications Tab:**
-- Initial app list loads in under 5 seconds (for 100 apps)
+**For Packages Tab:**
+- Initial package list loads in under 5 seconds (for 100 packages)
 - Search and filters work instantly
-- App icons load progressively without blocking
-- All app actions (launch, stop, etc.) complete in under 3 seconds
-- APK extraction works for apps of all sizes
+- Package icons load progressively without blocking
+- All package actions (launch, stop, etc.) complete in under 3 seconds
+- APK extraction works for packages of all sizes
 
 **Overall:**
 - Tab switching is instant (under 100ms)
-- No crashes or freezes with 100+ processes or 200+ apps
+- No crashes or freezes with 100+ processes or 200+ packages
 - Mobile responsive on tablet-sized screens
 - Accessible via keyboard navigation
 - Clear error messages for all failures
@@ -1021,7 +1024,7 @@ Subtle, purposeful animations:
 - Mitigation: Cache aggressively, batch requests where possible
 - Mitigation: Debounce user actions, don't query on every keystroke
 
-**Risk: Large app count (200+) slows UI**
+**Risk: Large package count (200+) slows UI**
 - Mitigation: Implement virtual scrolling for tables/grids
 - Mitigation: Lazy-load icons and details
 - Mitigation: Pagination as fallback
@@ -1047,11 +1050,11 @@ Subtle, purposeful animations:
 
 1. **Metrics Granularity:** Should we track CPU/memory per-second (more data, smoother graphs) or every 2-5 seconds (less overhead)?
 
-2. **Process Grouping:** Should we group processes by package/app in the UI, or keep flat list?
+2. **Process Grouping:** Should we group processes by package in the UI, or keep flat list?
 
-3. **System App Visibility:** Should system apps be hidden by default in Applications tab, or just visually differentiated?
+3. **System Package Visibility:** Should system packages be hidden by default in Packages tab, or just visually differentiated?
 
-4. **Permission Risk Scoring:** Should we add a "risk score" for apps based on their permissions (e.g., app with SMS + Location + Internet = high risk)?
+4. **Permission Risk Scoring:** Should we add a "risk score" for packages based on their permissions (e.g., package with SMS + Location + Internet = high risk)?
 
 5. **Workshop Priority:** Which Workshop tool should be implemented first? Custom Scripts seems most critical, but Objection integration might provide faster value.
 
@@ -1063,9 +1066,9 @@ Subtle, purposeful animations:
 
 ## Conclusion
 
-This plan establishes Processes and Applications tabs as the reconnaissance foundation of Epifania. These tabs provide visibility into device runtime state and installed software, enabling informed target selection before active analysis begins in the Workshop.
+This plan establishes Processes and Packages tabs as the reconnaissance foundation of Epifania. These tabs provide visibility into device runtime state and installed software, enabling informed target selection before active analysis begins in the Workshop.
 
-The phased implementation approach allows for iterative development with clear milestones. Each phase delivers usable functionality, avoiding the risk of building everything upfront only to discover UX issues later.
+The phased implementation approach allows for iterative development with clear milestones. Phase 1 (tab navigation structure) has been completed successfully, with a clean separation between the Device tab (Frida management) and placeholder tabs for future functionality.
 
 Once these two tabs are complete, Epifania will have transformed from a Frida server manager into a genuine dynamic analysis platform with reconnaissance capabilities. The Workshop tab will then build on this foundation to provide active instrumentation features.
 
