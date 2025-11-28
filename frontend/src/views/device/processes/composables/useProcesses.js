@@ -10,7 +10,10 @@ export function useProcesses(deviceSerial) {
   const lastUpdate = ref('Never')
   const autoRefresh = ref(true)
   const refreshInterval = ref(2000)
+  const processHistory = ref([])
+  const memoryHistory = ref([])
   let refreshTimer = null
+  const maxHistoryPoints = 60
 
   const fetchProcesses = async () => {
     try {
@@ -19,6 +22,30 @@ export function useProcesses(deviceSerial) {
       processes.value = response.data.processes
       stats.value = response.data.stats
       lastUpdate.value = new Date().toLocaleTimeString()
+
+      const total = response.data.stats?.total ?? 0
+      const user = response.data.stats?.user ?? 0
+      const system = response.data.stats?.system ?? 0
+      const totalMemoryMb = response.data.stats?.total_memory_mb ?? 0
+      const timestamp = new Date().toISOString()
+
+      processHistory.value.push({
+        timestamp,
+        total,
+        user,
+        system
+      })
+      memoryHistory.value.push({
+        timestamp,
+        memoryMb: totalMemoryMb
+      })
+
+      if (processHistory.value.length > maxHistoryPoints) {
+        processHistory.value.splice(0, processHistory.value.length - maxHistoryPoints)
+      }
+      if (memoryHistory.value.length > maxHistoryPoints) {
+        memoryHistory.value.splice(0, memoryHistory.value.length - maxHistoryPoints)
+      }
     } catch (err) {
       console.error('Failed to fetch processes:', err)
       toast.error('Failed to fetch processes')
@@ -47,6 +74,13 @@ export function useProcesses(deviceSerial) {
     }
   }
 
+  const setRefreshInterval = (newIntervalMs) => {
+    refreshInterval.value = newIntervalMs
+    if (autoRefresh.value) {
+      startAutoRefresh()
+    }
+  }
+
   onMounted(async () => {
     await fetchProcesses()
     if (autoRefresh.value) {
@@ -65,8 +99,11 @@ export function useProcesses(deviceSerial) {
     lastUpdate,
     autoRefresh,
     refreshInterval,
+    processHistory,
+    memoryHistory,
     fetchProcesses,
-    toggleAutoRefresh
+    toggleAutoRefresh,
+    setRefreshInterval
   }
 }
 

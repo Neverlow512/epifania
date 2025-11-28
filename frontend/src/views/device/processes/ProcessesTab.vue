@@ -1,35 +1,52 @@
 <template>
   <div class="space-y-4">
-    <ProcessStatsBar
-      :stats="stats"
-      :autoRefresh="autoRefresh"
-      :refreshInterval="refreshInterval"
-      :lastUpdate="lastUpdate"
-      :loading="loading"
-      @refresh="fetchProcesses"
-      @toggle-auto-refresh="toggleAutoRefresh"
-    />
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <!-- Left: processes widget (filters + table) -->
+      <div class="lg:col-span-3">
+        <div class="card bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20 h-full">
+          <div class="card-body p-4 space-y-4">
+            <ProcessControlBar
+              :searchQuery="searchQuery"
+              :filterType="filterType"
+              :sortBy="sortBy"
+              @update:searchQuery="searchQuery = $event"
+              @update:filterType="filterType = $event"
+              @update:sortBy="sortBy = $event"
+            />
 
-    <ProcessControlBar
-      :searchQuery="searchQuery"
-      :filterType="filterType"
-      :sortBy="sortBy"
-      @update:searchQuery="searchQuery = $event"
-      @update:filterType="filterType = $event"
-      @update:sortBy="sortBy = $event"
-    />
+            <div class="-mx-4 -mb-4">
+              <ProcessTable
+                :paginatedProcesses="paginatedProcesses"
+                :startIndex="startIndex"
+                :endIndex="endIndex"
+                :totalCount="filteredProcesses.length"
+                :currentPage="currentPage"
+                :loading="loading"
+                @inspect="showProcessDetails"
+                @kill="confirmKill"
+                @page-change="currentPage = $event"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
-    <ProcessTable
-      :paginatedProcesses="paginatedProcesses"
-      :startIndex="startIndex"
-      :endIndex="endIndex"
-      :totalCount="filteredProcesses.length"
-      :currentPage="currentPage"
-      :loading="loading"
-      @inspect="showProcessDetails"
-      @kill="confirmKill"
-      @page-change="currentPage = $event"
-    />
+      <!-- Right: compact stats / overview widget -->
+      <div class="lg:col-span-2">
+        <ProcessStatsBar
+          :stats="stats"
+          :autoRefresh="autoRefresh"
+          :refreshInterval="refreshInterval"
+          :lastUpdate="lastUpdate"
+          :loading="loading"
+          :processHistory="processHistory"
+          :memoryHistory="memoryHistory"
+          @refresh="fetchProcesses"
+          @toggle-auto-refresh="toggleAutoRefresh"
+          @update-refresh-interval="setRefreshInterval"
+        />
+      </div>
+    </div>
 
     <ProcessDetailsModal
       :show="showDetailsModal"
@@ -83,7 +100,10 @@ export default {
       autoRefresh,
       refreshInterval,
       fetchProcesses,
-      toggleAutoRefresh
+      toggleAutoRefresh,
+      processHistory,
+      memoryHistory,
+      setRefreshInterval
     } = useProcesses(props.device.serial)
 
     const {
@@ -121,6 +141,9 @@ export default {
       refreshInterval,
       fetchProcesses,
       toggleAutoRefresh,
+      processHistory,
+      memoryHistory,
+      setRefreshInterval,
       searchQuery,
       filterType,
       sortBy,
