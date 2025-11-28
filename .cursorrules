@@ -5,4 +5,4 @@ The user preffers a clear separation of concerns. Multiple smaller files, packag
 Wether when writting code, scripts or documentation or when setting up the output of a new feature, the user preffers everything to be categorized and if needed each category to have subfolders too.
 The user preffers the deletion of test scripts in order to remove unnecessary code, however, they also make it clear that deletion can only happen once the features from the test script are confirmed to be implemented in the project as well.
 The user preffers avoiding long comments that use """ quotation marks """ and preffers normal comments notted with #, short and proffesional.
-
+Follow ARCHITECTURE.md for feature-based structure, separation of concerns, and single-responsibility modules.

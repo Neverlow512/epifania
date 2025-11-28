@@ -7,13 +7,6 @@
 3. **Professional Tone**: All documentation and code must maintain a technical, professional tone
 4. **Clean Code**: Code should be self-documenting; avoid redundant comments
 
-## Comment Guidelines
-
-- Do NOT comment obvious code
-- Do NOT use decorative comments
-- DO comment complex algorithms or non-obvious logic
-- Keep comments short and technical
-
 ## Shell Scripts
 
 1. **Avoid New Shell Scripts**: Do not create new shell scripts unless absolutely necessary
@@ -22,12 +15,22 @@
 
 ## Security Standards
 
-1. **Input Validation**: Always validate and sanitize external inputs
+**Context**: Epifania is a local security research tool that requires privileged access to perform dynamic analysis. It runs locally, connects to devices via ADB, and requires root access for instrumentation. Users are expected to understand the security implications.
+
+1. **Input Validation**: Always validate and sanitize external inputs (device data, file paths, user-provided scripts)
 2. **Dependencies**: Keep dependencies updated; review security advisories regularly
-3. **Secrets Management**: Never hardcode credentials; use environment variables or secure vaults
-4. **Defense in Depth**: Implement multiple layers of security controls
-5. **Least Privilege**: Grant minimum necessary permissions to users and processes
-6. **Error Handling**: Avoid exposing sensitive information in error messages
+3. **Secrets Management**: Never hardcode credentials; use environment variables for API keys (e.g., GitHub tokens)
+4. **Defense in Depth**: Validate data at API boundaries and before executing system commands
+5. **Execution Context**: Document when operations require root access; fail gracefully when unavailable
+6. **Error Handling**: Avoid exposing sensitive device information or internal paths in error messages; provide clear, actionable errors without leaking system details
+7. **Command Injection**: Sanitize all inputs before passing to subprocess/shell commands (ADB, Frida)
+
+## Comment Guidelines
+
+- Do NOT comment obvious code
+- Do NOT use decorative comments
+- DO comment complex algorithms or non-obvious logic
+- Keep comments short and technical
 
 ## Examples
 
