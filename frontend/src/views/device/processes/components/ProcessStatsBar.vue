@@ -28,7 +28,6 @@
           <button
             type="button"
             class="btn btn-ghost btn-xs text-xs px-2 h-6 min-h-0"
-            :disabled="loading"
             @click="$emit('refresh')"
           >
             Refresh
@@ -36,109 +35,147 @@
         </div>
       </div>
 
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-        <div class="bg-black/30 rounded border border-primary/20 p-3 space-y-1">
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">Processes</span>
-            <span class="text-[10px] text-slate-500">total/user/system</span>
+      <div class="grid grid-cols-2 gap-2">
+        <!-- Processes -->
+        <div class="bg-black/40 rounded-lg border border-slate-700/50 p-3 flex flex-col">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-7 h-7 rounded bg-violet-500/20 flex items-center justify-center flex-shrink-0">
+              <svg class="w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              </svg>
+            </div>
+            <span class="text-xs text-slate-400 font-medium">Processes</span>
           </div>
-          <div class="text-white text-lg leading-tight">
-            {{ stats.total || 0 }}
-          </div>
-          <div class="text-slate-500">
-            User: {{ stats.user || 0 }} • System: {{ stats.system || 0 }}
-          </div>
-        </div>
-
-        <div class="bg-black/30 rounded border border-primary/20 p-3 space-y-1">
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">CPU</span>
-            <span class="text-[10px] text-slate-500">overall</span>
-          </div>
-          <div class="text-white text-lg leading-tight">
-            {{ (cpu.overall_percent || 0).toFixed(1) }}%
-          </div>
-          <div class="text-slate-500 truncate">
-            <span v-if="cpu.top_consumers && cpu.top_consumers.length">
-              Top: {{ cpu.top_consumers[0].name }} ({{ cpu.top_consumers[0].cpu_percent }}%)
-            </span>
-            <span v-else>
-              No active consumers
-            </span>
+          <div class="text-2xl font-semibold text-white font-mono mb-1">{{ stats.total || 0 }}</div>
+          <div class="text-[11px] text-slate-500 mt-auto">
+            <span class="text-cyan-400">{{ stats.user || 0 }}</span> user
+            <span class="mx-1 text-slate-600">|</span>
+            <span class="text-amber-400">{{ stats.system || 0 }}</span> system
           </div>
         </div>
 
-        <div class="bg-black/30 rounded border border-primary/20 p-3 space-y-1">
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">RAM</span>
-            <span class="text-[10px] text-slate-500">used / total</span>
+        <!-- CPU -->
+        <div class="bg-black/40 rounded-lg border border-slate-700/50 p-3 flex flex-col">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-7 h-7 rounded bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+              <svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+              </svg>
+            </div>
+            <span class="text-xs text-slate-400 font-medium">CPU</span>
+            <span class="ml-auto text-[10px] px-1.5 py-0.5 rounded" :class="cpuBadgeClass">{{ cpuLoadLabel }}</span>
           </div>
-          <div class="text-white text-lg leading-tight">
-            {{ formatMemory(memory.used_mb) }} / {{ formatMemory(memory.total_mb) }}
+          <div class="flex items-baseline gap-2 mb-2">
+            <span class="text-2xl font-semibold text-white font-mono">{{ (cpu.overall_percent || 0).toFixed(1) }}</span>
+            <span class="text-sm text-slate-500">%</span>
           </div>
-          <div class="w-full h-1.5 bg-neutral-800 rounded overflow-hidden">
-            <div
-              class="h-full bg-emerald-500"
-              :style="{ width: memoryFillPercent + '%' }"
-            ></div>
+          <div class="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden mb-2">
+            <div class="h-full rounded-full transition-all duration-300" :class="cpuUsageClass" :style="{ width: cpuUsage + '%' }"></div>
           </div>
-          <div class="text-slate-500">
-            Free: {{ formatMemory(memory.free_mb) }} • Cache: {{ formatMemory(memory.cached_mb) }}
-          </div>
-        </div>
-
-        <div class="bg-black/30 rounded border border-primary/20 p-3 space-y-1">
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">Storage (/data)</span>
-            <span class="text-[10px] text-slate-500">used / total</span>
-          </div>
-          <div class="text-white text-lg leading-tight">
-            {{ formatGb(storage.used_gb) }} / {{ formatGb(storage.total_gb) }}
-          </div>
-          <div class="w-full h-1.5 bg-neutral-800 rounded overflow-hidden">
-            <div
-              class="h-full bg-indigo-500"
-              :style="{ width: (storage.percent_used || 0) + '%' }"
-            ></div>
-          </div>
-          <div class="text-slate-500">
-            Free: {{ formatGb(storage.free_gb) }} • {{ (storage.percent_used || 0).toFixed(1) }}%
+          <div class="text-[11px] text-slate-500 truncate mt-auto">
+            <template v-if="cpu.top_consumers && cpu.top_consumers.length">
+              <span class="text-slate-400">Top:</span> {{ cpu.top_consumers[0].name }}
+            </template>
+            <template v-else>Idle</template>
           </div>
         </div>
 
-        <div class="bg-black/30 rounded border border-primary/20 p-3 space-y-1">
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">Network</span>
-            <span class="text-[10px] text-slate-500">throughput</span>
+        <!-- RAM -->
+        <div class="bg-black/40 rounded-lg border border-slate-700/50 p-3 flex flex-col">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-7 h-7 rounded bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+              <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+            </div>
+            <span class="text-xs text-slate-400 font-medium">Memory</span>
+            <span class="ml-auto text-[10px] text-slate-500">{{ memoryFillPercent }}%</span>
           </div>
-          <div class="text-white text-lg leading-tight">
-            ↑ {{ formatBytesPerSec(network.throughput?.bytes_sent_per_sec) }}
-            · ↓ {{ formatBytesPerSec(network.throughput?.bytes_recv_per_sec) }}
+          <div class="flex items-baseline gap-1 mb-1">
+            <span class="text-lg font-semibold text-white font-mono">{{ formatMemoryCompact(memory.used_mb) }}</span>
+            <span class="text-xs text-slate-600">/</span>
+            <span class="text-sm text-slate-400 font-mono">{{ formatMemoryCompact(memory.total_mb) }}</span>
           </div>
-          <div class="text-slate-500 truncate">
-            Recent endpoints: {{ (network.recent_endpoints || []).length }}
+          <div class="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden mb-2">
+            <div class="h-full bg-emerald-500 rounded-full" :style="{ width: memoryFillPercent + '%' }"></div>
+          </div>
+          <div class="text-[11px] text-slate-500 mt-auto">
+            <span class="text-emerald-400">{{ formatMemoryCompact(memory.free_mb) }}</span> free
           </div>
         </div>
 
-        <div class="bg-black/30 rounded border border-primary/20 p-3 space-y-1">
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">Churn ({{ churn.window_seconds || 60 }}s)</span>
-            <span class="text-[10px] text-slate-500">spawned / killed</span>
+        <!-- Storage -->
+        <div class="bg-black/40 rounded-lg border border-slate-700/50 p-3 flex flex-col">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-7 h-7 rounded bg-indigo-500/20 flex items-center justify-center flex-shrink-0">
+              <svg class="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+              </svg>
+            </div>
+            <span class="text-xs text-slate-400 font-medium">Storage</span>
+            <span class="ml-auto text-[10px] text-slate-500">{{ (storage.percent_used || 0).toFixed(0) }}%</span>
           </div>
-          <div class="text-white text-lg leading-tight">
-            {{ churn.spawned_count || 0 }} / {{ churn.killed_count || 0 }}
+          <div class="flex items-baseline gap-1 mb-1">
+            <span class="text-lg font-semibold text-white font-mono">{{ formatGb(storage.used_gb) }}</span>
+            <span class="text-xs text-slate-600">/</span>
+            <span class="text-sm text-slate-400 font-mono">{{ formatGb(storage.total_gb) }}</span>
           </div>
-          <div class="text-slate-500">
-            Net:
-            <span
-              :class="{
-                'text-emerald-400': churn.net_change > 0,
-                'text-red-400': churn.net_change < 0,
-                'text-slate-400': !churn.net_change
-              }"
-            >
-              {{ churn.net_change || 0 }}
-            </span>
+          <div class="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden mb-2">
+            <div class="h-full bg-indigo-500 rounded-full" :style="{ width: (storage.percent_used || 0) + '%' }"></div>
+          </div>
+          <div class="text-[11px] text-slate-500 mt-auto">
+            <span class="text-indigo-400">{{ formatGb(storage.free_gb) }}</span> free
+          </div>
+        </div>
+
+        <!-- Network -->
+        <div class="bg-black/40 rounded-lg border border-slate-700/50 p-3 flex flex-col">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-7 h-7 rounded bg-sky-500/20 flex items-center justify-center flex-shrink-0">
+              <svg class="w-4 h-4 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+              </svg>
+            </div>
+            <span class="text-xs text-slate-400 font-medium">Network</span>
+          </div>
+          <div class="flex items-center gap-3 mb-2">
+            <div class="flex items-center gap-1">
+              <span class="text-green-400 text-xs">&#9650;</span>
+              <span class="text-sm font-mono text-white">{{ formatBytesPerSecCompact(network.throughput?.bytes_sent_per_sec) }}</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="text-blue-400 text-xs">&#9660;</span>
+              <span class="text-sm font-mono text-white">{{ formatBytesPerSecCompact(network.throughput?.bytes_recv_per_sec) }}</span>
+            </div>
+          </div>
+          <div class="text-[11px] text-slate-500 mt-auto">
+            {{ (network.recent_endpoints || []).length }} endpoints
+          </div>
+        </div>
+
+        <!-- Churn -->
+        <div class="bg-black/40 rounded-lg border border-slate-700/50 p-3 flex flex-col">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-7 h-7 rounded bg-orange-500/20 flex items-center justify-center flex-shrink-0">
+              <svg class="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </div>
+            <span class="text-xs text-slate-400 font-medium">Churn</span>
+            <span class="ml-auto text-[10px] text-slate-600">{{ churn.window_seconds || 60 }}s</span>
+          </div>
+          <div class="flex items-center gap-3 mb-2">
+            <div class="text-center">
+              <div class="text-lg font-semibold text-green-400 font-mono">{{ churn.spawned_count || 0 }}</div>
+              <div class="text-[10px] text-slate-600">spawned</div>
+            </div>
+            <div class="text-center">
+              <div class="text-lg font-semibold text-red-400 font-mono">{{ churn.killed_count || 0 }}</div>
+              <div class="text-[10px] text-slate-600">killed</div>
+            </div>
+          </div>
+          <div class="text-[11px] text-slate-500 mt-auto">
+            Net: <span :class="churnNetClass">{{ churn.net_change > 0 ? '+' : '' }}{{ churn.net_change || 0 }}</span>
           </div>
         </div>
       </div>
@@ -534,6 +571,36 @@ export default {
     intervalOptions() {
       return [1000, 2000, 5000, 10000]
     },
+    cpuUsage() {
+      const value = this.cpu && this.cpu.overall_percent ? this.cpu.overall_percent : 0
+      if (value < 0) return 0
+      if (value > 100) return 100
+      return Number(value.toFixed(1))
+    },
+    cpuUsageClass() {
+      const v = this.cpuUsage
+      if (v < 40) return 'bg-emerald-500'
+      if (v < 75) return 'bg-amber-400'
+      return 'bg-red-500'
+    },
+    cpuLoadLabel() {
+      const v = this.cpu && this.cpu.overall_percent ? this.cpu.overall_percent : 0
+      if (v < 40) return 'Low'
+      if (v < 75) return 'Moderate'
+      return 'High'
+    },
+    cpuBadgeClass() {
+      const v = this.cpuUsage
+      if (v < 40) return 'bg-emerald-500/20 text-emerald-400'
+      if (v < 75) return 'bg-amber-500/20 text-amber-400'
+      return 'bg-red-500/20 text-red-400'
+    },
+    churnNetClass() {
+      const net = this.churn.net_change || 0
+      if (net > 0) return 'text-emerald-400'
+      if (net < 0) return 'text-red-400'
+      return 'text-slate-400'
+    },
     memory() {
       return this.memoryMetrics || {}
     },
@@ -578,6 +645,11 @@ export default {
       if (mb < 1) return `${(mb * 1024).toFixed(0)} KB`
       return `${mb.toFixed(1)} MB`
     },
+    formatMemoryCompact(mb) {
+      if (!mb) return '0'
+      if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
+      return `${mb.toFixed(0)} MB`
+    },
     formatGb(gb) {
       if (!gb) return '0 GB'
       return `${gb.toFixed(2)} GB`
@@ -586,6 +658,12 @@ export default {
       const v = value || 0
       if (v < 1024) return `${v} B/s`
       if (v < 1024 * 1024) return `${(v / 1024).toFixed(1)} KB/s`
+      return `${(v / (1024 * 1024)).toFixed(1)} MB/s`
+    },
+    formatBytesPerSecCompact(value) {
+      const v = value || 0
+      if (v < 1024) return `${v} B/s`
+      if (v < 1024 * 1024) return `${(v / 1024).toFixed(0)} KB/s`
       return `${(v / (1024 * 1024)).toFixed(1)} MB/s`
     }
   }
