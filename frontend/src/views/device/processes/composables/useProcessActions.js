@@ -9,6 +9,8 @@ export function useProcessActions(deviceSerial, fetchProcesses) {
   const showDetailsModal = ref(false)
   const loadingDetails = ref(false)
   const processDetails = ref(null)
+  const processMemoryDetails = ref(null)
+  const processNetworkDetails = ref(null)
   
   const processToKill = ref(null)
   const showKillModal = ref(false)
@@ -19,12 +21,33 @@ export function useProcessActions(deviceSerial, fetchProcesses) {
     showDetailsModal.value = true
     loadingDetails.value = true
     processDetails.value = null
+    processMemoryDetails.value = null
+    processNetworkDetails.value = null
     
     try {
-      const response = await axios.get(
-        `http://localhost:8000/api/devices/${deviceSerial}/processes/${process.pid}`
-      )
-      processDetails.value = response.data
+      const [detailsResponse, memoryResponse, networkResponse] = await Promise.all([
+        axios.get(
+          `http://localhost:8000/api/devices/${deviceSerial}/processes/${process.pid}`
+        ),
+        axios.get(
+          `http://localhost:8000/api/devices/${deviceSerial}/system/memory`,
+          { params: { pid: process.pid } }
+        ),
+        axios.get(
+          `http://localhost:8000/api/devices/${deviceSerial}/system/network`,
+          { params: { pid: process.pid } }
+        )
+      ])
+
+      processDetails.value = detailsResponse.data
+
+      if (memoryResponse.data && memoryResponse.data.focused_process) {
+        processMemoryDetails.value = memoryResponse.data.focused_process
+      }
+
+      if (networkResponse.data && networkResponse.data.focused_process) {
+        processNetworkDetails.value = networkResponse.data.focused_process
+      }
     } catch (err) {
       console.error('Failed to fetch process details:', err)
       toast.error('Failed to fetch process details')
@@ -37,6 +60,8 @@ export function useProcessActions(deviceSerial, fetchProcesses) {
     showDetailsModal.value = false
     selectedProcess.value = null
     processDetails.value = null
+    processMemoryDetails.value = null
+    processNetworkDetails.value = null
   }
 
   const confirmKill = (process) => {
@@ -73,6 +98,8 @@ export function useProcessActions(deviceSerial, fetchProcesses) {
     showDetailsModal,
     loadingDetails,
     processDetails,
+    processMemoryDetails,
+    processNetworkDetails,
     processToKill,
     showKillModal,
     killing,

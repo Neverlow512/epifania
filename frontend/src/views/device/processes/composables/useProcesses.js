@@ -2,7 +2,8 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { useToast } from '../../../../composables/useToast'
 
-export function useProcesses(deviceSerial) {
+export function useProcesses(deviceSerial, options = {}) {
+  const { extraFetchers = [] } = options
   const toast = useToast()
   const processes = ref([])
   const stats = ref({})
@@ -54,7 +55,21 @@ export function useProcesses(deviceSerial) {
     }
   }
 
+  const refreshAll = async () => {
+    await fetchProcesses()
+
+    if (Array.isArray(extraFetchers) && extraFetchers.length > 0) {
+      try {
+        await Promise.all(extraFetchers.map(fn => (typeof fn === 'function' ? fn() : null)))
+      } catch (err) {
+        console.error('Failed to refresh auxiliary metrics:', err)
+        toast.error('Failed to refresh metrics')
+      }
+    }
+  }
+
   const toggleAutoRefresh = () => {
+    autoRefresh.value = !autoRefresh.value
     if (autoRefresh.value) {
       startAutoRefresh()
     } else {
@@ -64,7 +79,7 @@ export function useProcesses(deviceSerial) {
 
   const startAutoRefresh = () => {
     stopAutoRefresh()
-    refreshTimer = setInterval(fetchProcesses, refreshInterval.value)
+    refreshTimer = setInterval(refreshAll, refreshInterval.value)
   }
 
   const stopAutoRefresh = () => {
@@ -82,7 +97,7 @@ export function useProcesses(deviceSerial) {
   }
 
   onMounted(async () => {
-    await fetchProcesses()
+    await refreshAll()
     if (autoRefresh.value) {
       startAutoRefresh()
     }
@@ -102,8 +117,8 @@ export function useProcesses(deviceSerial) {
     processHistory,
     memoryHistory,
     fetchProcesses,
+    refreshAll,
     toggleAutoRefresh,
     setRefreshInterval
   }
 }
-

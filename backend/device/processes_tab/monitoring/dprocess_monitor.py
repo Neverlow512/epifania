@@ -1,4 +1,5 @@
 import re
+import time
 from typing import List, Dict, Optional
 from collections import defaultdict, deque
 from datetime import datetime
@@ -8,11 +9,75 @@ from core.adb_manager import ADBManager
 logger = get_logger(__name__, "device")
 
 
+class ChurnTracker:
+    # Tracks process spawn/kill events with timestamps for time-windowed counts
+    
+    def __init__(self, max_events: int = 1000):
+        self._spawn_events: Dict[str, deque] = defaultdict(lambda: deque(maxlen=max_events))
+        self._kill_events: Dict[str, deque] = defaultdict(lambda: deque(maxlen=max_events))
+    
+    def record_spawn(self, device_serial: str, process: Dict):
+        timestamp = time.time()
+        self._spawn_events[device_serial].append({
+            "timestamp": timestamp,
+            "pid": process.get("pid"),
+            "name": process.get("name", "unknown")
+        })
+    
+    def record_kill(self, device_serial: str, process: Dict):
+        timestamp = time.time()
+        self._kill_events[device_serial].append({
+            "timestamp": timestamp,
+            "pid": process.get("pid"),
+            "name": process.get("name", "unknown")
+        })
+    
+    def get_churn_stats(self, device_serial: str, window_seconds: int = 60) -> Dict:
+        current_time = time.time()
+        cutoff = current_time - window_seconds
+        
+        spawned_count = 0
+        spawned_recent = []
+        for event in self._spawn_events[device_serial]:
+            if event["timestamp"] >= cutoff:
+                spawned_count += 1
+                spawned_recent.append({
+                    "pid": event["pid"],
+                    "name": event["name"],
+                    "seconds_ago": int(current_time - event["timestamp"])
+                })
+        
+        killed_count = 0
+        killed_recent = []
+        for event in self._kill_events[device_serial]:
+            if event["timestamp"] >= cutoff:
+                killed_count += 1
+                killed_recent.append({
+                    "pid": event["pid"],
+                    "name": event["name"],
+                    "seconds_ago": int(current_time - event["timestamp"])
+                })
+        
+        # Sort by most recent first, limit to 10
+        spawned_recent.sort(key=lambda x: x["seconds_ago"])
+        killed_recent.sort(key=lambda x: x["seconds_ago"])
+        
+        return {
+            "window_seconds": window_seconds,
+            "spawned_count": spawned_count,
+            "killed_count": killed_count,
+            "net_change": spawned_count - killed_count,
+            "recent_spawned": spawned_recent[:10],
+            "recent_killed": killed_recent[:10]
+        }
+
+
 class ProcessMonitor:
     def __init__(self, adb_manager: ADBManager):
         self.adb_manager = adb_manager
         self.metrics_storage = defaultdict(lambda: defaultdict(lambda: deque(maxlen=120)))
         self.previous_snapshots = defaultdict(dict)
+        self.churn_tracker = ChurnTracker()
         logger.info("ProcessMonitor initialized")
     
     def list_processes(self, device_serial: str) -> List[Dict]:
@@ -283,6 +348,13 @@ class ProcessMonitor:
         spawned = [current[pid] for pid in spawned_pids]
         killed = [previous[pid] for pid in killed_pids]
         
+        # Record churn events (only if we have a previous snapshot to compare)
+        if previous:
+            for proc in spawned:
+                self.churn_tracker.record_spawn(device_serial, proc)
+            for proc in killed:
+                self.churn_tracker.record_kill(device_serial, proc)
+        
         changed = []
         for pid in previous_pids & current_pids:
             prev = previous[pid]
@@ -303,6 +375,9 @@ class ProcessMonitor:
             'killed': killed,
             'changed': changed
         }
+    
+    def get_churn_stats(self, device_serial: str, window_seconds: int = 60) -> Dict:
+        return self.churn_tracker.get_churn_stats(device_serial, window_seconds)
     
     def cleanup_metrics(self, device_serial: str, current_pids: List[int]):
         if device_serial in self.metrics_storage:

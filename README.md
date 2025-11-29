@@ -44,7 +44,12 @@ A GUI-based Dynamic Instrumentation Platform wrapping Frida and ADB for security
 - ✅ Tab navigation infrastructure with reusable components
 - ✅ Processes tab with real-time process monitoring, inspection, and termination
 - ✅ Process metrics collection with historical data tracking
+- ✅ System resource monitoring (CPU, memory, storage, network)
+- ✅ Process churn tracking (spawned/killed processes over time)
+- ✅ Network connection monitoring with per-process TCP connections
+- ✅ Storage partition monitoring with usage statistics
 - ✅ Modular frontend architecture with feature-based directory structure
+- ✅ Unified launcher script for cross-platform deployment
 
 **In Development:**
 - 🔄 Packages tab for application catalog and lifecycle control
@@ -145,14 +150,29 @@ cd ..
 
 ### Running the Application
 
-Execute the startup script from the project root:
+#### Option 1: Using the Unified Launcher (Recommended)
+
+Execute the Python launcher from the project root:
+
+```bash
+python3 launcher.py
+```
+
+The launcher automatically:
+- Uses the virtual environment
+- Starts both backend and frontend services
+- Monitors service health
+- Handles graceful shutdown with Ctrl+C
+
+#### Option 2: Using the Shell Script (Linux/macOS)
 
 ```bash
 ./start.sh
 ```
 
-The script automatically uses the virtual environment and starts both services:
+The script starts both services and provides log file paths for monitoring.
 
+**Service URLs:**
 - Backend API: http://127.0.0.1:8000
 - Frontend Dashboard: http://127.0.0.1:5173
 
@@ -680,6 +700,208 @@ Retrieves historical metrics for processes on the device.
 }
 ```
 
+#### Get Process Churn
+
+```
+GET /api/devices/{device_id}/processes/churn
+```
+
+Retrieves process spawn/kill statistics over a time window.
+
+**Query Parameters:**
+- `window` (optional): Time window in seconds (default: 60)
+
+**Response:**
+```json
+{
+  "spawned_count": 5,
+  "killed_count": 3,
+  "net_change": 2,
+  "recent_spawned": [
+    {
+      "pid": 1234,
+      "name": "com.example.app",
+      "time_ago": "5s"
+    }
+  ],
+  "recent_killed": [
+    {
+      "pid": 5678,
+      "name": "old.process",
+      "time_ago": "12s"
+    }
+  ]
+}
+```
+
+### System Monitoring
+
+#### Get CPU Usage
+
+```
+GET /api/devices/{device_id}/system/cpu
+```
+
+Retrieves overall CPU usage and top CPU-consuming processes.
+
+**Query Parameters:**
+- `top_n` (optional): Number of top processes to return (default: 5)
+
+**Response:**
+```json
+{
+  "overall_percent": 45.2,
+  "top_consumers": [
+    {
+      "pid": 1234,
+      "name": "com.example.app",
+      "cpu_percent": 15.3
+    }
+  ]
+}
+```
+
+#### Get Memory Usage
+
+```
+GET /api/devices/{device_id}/system/memory
+```
+
+Retrieves system memory statistics and optionally per-process memory details.
+
+**Query Parameters:**
+- `pid` (optional): Process ID for detailed memory information
+
+**Response:**
+```json
+{
+  "total_mb": 2048.0,
+  "used_mb": 1536.0,
+  "free_mb": 512.0,
+  "available_mb": 768.0,
+  "buffers_mb": 128.0,
+  "cached_mb": 256.0,
+  "focused_process": {
+    "pid": 1234,
+    "rss_mb": 45.6,
+    "vsz_mb": 123.4,
+    "peak_mb": 50.2
+  }
+}
+```
+
+#### Get Storage Usage
+
+```
+GET /api/devices/{device_id}/system/storage
+```
+
+Retrieves storage usage for a specific partition.
+
+**Query Parameters:**
+- `partition` (optional): Partition path (default: /data)
+
+**Response:**
+```json
+{
+  "partition": "/data",
+  "total_gb": 32.0,
+  "used_gb": 18.5,
+  "free_gb": 13.5,
+  "percent_used": 57.8
+}
+```
+
+#### Get All Storage Partitions
+
+```
+GET /api/devices/{device_id}/system/storage/all
+```
+
+Retrieves usage statistics for all mounted partitions.
+
+**Response:**
+```json
+{
+  "partitions": [
+    {
+      "partition": "/data",
+      "total_gb": 32.0,
+      "used_gb": 18.5,
+      "free_gb": 13.5,
+      "percent_used": 57.8
+    },
+    {
+      "partition": "/system",
+      "total_gb": 4.0,
+      "used_gb": 3.2,
+      "free_gb": 0.8,
+      "percent_used": 80.0
+    }
+  ]
+}
+```
+
+#### Get Network Statistics
+
+```
+GET /api/devices/{device_id}/system/network
+```
+
+Retrieves network throughput and optionally per-process connection details.
+
+**Query Parameters:**
+- `pid` (optional): Process ID for detailed connection information
+
+**Response:**
+```json
+{
+  "throughput": {
+    "bytes_sent_per_sec": 1024,
+    "bytes_received_per_sec": 2048
+  },
+  "recent_endpoints": [
+    {
+      "remote_ip": "192.168.1.100",
+      "remote_port": 443,
+      "count": 5
+    }
+  ],
+  "focused_process": {
+    "pid": 1234,
+    "connections": [
+      {
+        "local_address": "192.168.1.50:12345",
+        "remote_address": "192.168.1.100:443",
+        "state": "ESTABLISHED"
+      }
+    ]
+  }
+}
+```
+
+#### Get All Network Connections
+
+```
+GET /api/devices/{device_id}/system/network/connections
+```
+
+Retrieves all TCP connections on the device.
+
+**Response:**
+```json
+{
+  "connections": [
+    {
+      "local_address": "192.168.1.50:12345",
+      "remote_address": "192.168.1.100:443",
+      "state": "ESTABLISHED",
+      "pid": 1234
+    }
+  ]
+}
+```
+
 ### Diagnostics
 
 #### Run ADB Diagnostics
@@ -847,6 +1069,13 @@ The device details interface is organized into tabbed sections for clear separat
 **Processes Tab:**
 - Real-time process list with auto-refresh (configurable 2-second interval)
 - Process statistics showing total, user, and system process counts with memory usage
+- System resource monitoring dashboard with live metrics:
+  - Overall CPU usage percentage with top CPU-consuming processes
+  - System memory usage (total, used, free, available, buffers, cached)
+  - Storage partition monitoring with usage statistics for all mounted partitions
+  - Network throughput tracking (bytes sent/received per second)
+  - Recent network endpoints with connection frequency
+- Process churn tracking showing spawned and killed processes over configurable time windows
 - Search functionality across PID, name, user, and command
 - Filter by process type (all, user, system)
 - Sort by PID, name, memory usage, or user
@@ -857,6 +1086,8 @@ The device details interface is organized into tabbed sections for clear separat
   - Thread listing
   - Open file descriptors
   - Memory maps (first 50 entries)
+  - Per-process memory breakdown (RSS, VSZ, peak memory)
+  - Per-process TCP connections with local/remote addresses and states
 - Process termination with confirmation dialog
 - Process state indicators (running, sleeping, zombie, traced, disk_sleep)
 - Change detection for spawned, killed, and resource-intensive processes
@@ -899,6 +1130,12 @@ The device details interface is organized into tabbed sections for clear separat
 
 - **Real-time Process List**: Enumerate all running processes via ADB with automatic refresh
 - **Process Statistics**: Display total, user, and system process counts with aggregate memory usage
+- **System Resource Monitoring**: Comprehensive device telemetry including:
+  - **CPU Monitoring**: Overall CPU usage percentage with top N CPU-consuming processes
+  - **Memory Monitoring**: System RAM metrics (total, used, free, available, buffers, cached) with per-process memory details
+  - **Storage Monitoring**: Partition usage statistics (total, used, free, percent used) for all mounted partitions
+  - **Network Monitoring**: Real-time throughput tracking (bytes sent/received per second), recent network endpoints, and per-process TCP connections
+- **Process Churn Tracking**: Monitor process spawn/kill events with configurable time windows and historical event lists
 - **Search and Filter**: Find processes by PID, name, user, or command with type filtering (all/user/system)
 - **Sorting Options**: Sort by PID, name, memory usage, or user
 - **Pagination**: Navigate large process lists with configurable page size
@@ -908,6 +1145,8 @@ The device details interface is organized into tabbed sections for clear separat
   - Thread enumeration
   - Open file descriptors
   - Memory maps (limited to first 50 entries)
+  - Detailed per-process memory breakdown (RSS, VSZ, peak, high-water mark)
+  - Active TCP connections with local/remote addresses and connection states
 - **Process Termination**: Kill processes with confirmation dialog (attempts root access if available)
 - **State Indicators**: Visual badges for process states (running, sleeping, zombie, traced, disk_sleep)
 - **Change Detection**: Track spawned, killed, and resource-intensive processes between refreshes
@@ -985,6 +1224,7 @@ epifania/
 │   │   ├── installer.py          # Frida server management
 │   │   ├── log_streamer.py       # Real-time log streaming
 │   │   ├── logger.py             # Centralized logging
+│   │   ├── log_paths.py          # Log directory configuration
 │   │   └── diagnostics.py        # ADB diagnostics system
 │   ├── device/                   # Device-specific feature modules
 │   │   ├── __init__.py
@@ -993,7 +1233,11 @@ epifania/
 │   │       ├── routes.py         # Process API endpoints
 │   │       └── monitoring/       # Process monitoring logic
 │   │           ├── __init__.py
-│   │           └── dprocess_monitor.py  # Process monitor class
+│   │           ├── dprocess_monitor.py  # Process monitor class
+│   │           ├── cpu_monitor.py       # CPU usage monitoring
+│   │           ├── memory_monitor.py    # Memory usage monitoring
+│   │           ├── storage_monitor.py   # Storage monitoring
+│   │           └── network_monitor.py   # Network monitoring
 │   ├── monitoring/               # Health and process monitoring
 │   │   ├── __init__.py
 │   │   ├── health_manager.py     # Health check system
@@ -1008,6 +1252,8 @@ epifania/
 │   │   └── {version}/            # Version-specific directories
 │   │       └── {arch}/           # Architecture-specific binaries
 │   ├── routers/                  # API route modules
+│   ├── utils/                    # Utility modules
+│   │   └── frida_debug.py        # Frida debugging utilities
 │   ├── venv/                     # Python virtual environment
 │   ├── main.py                   # FastAPI application entry
 │   └── requirements.txt          # Python dependencies
@@ -1043,7 +1289,9 @@ epifania/
 │   │   │       │   └── composables/
 │   │   │       │       ├── useProcessActions.js
 │   │   │       │       ├── useProcesses.js
-│   │   │       │       └── useProcessFilters.js
+│   │   │       │       ├── useProcessFilters.js
+│   │   │       │       ├── useProcessChurn.js
+│   │   │       │       └── useSystemMetrics.js
 │   │   │       ├── packages/     # Package management (placeholder)
 │   │   │       │   └── PackagesTab.vue
 │   │   │       ├── files/        # File browser (placeholder)
@@ -1074,13 +1322,18 @@ epifania/
 │       ├── uvicorn.log
 │       └── vite.log
 ├── tests/                        # Test suite
-│   └── test_logging_system.py   # Logging system validation
+│   ├── test_logging_system.py   # Logging system validation
+│   └── test_adb_migration.py    # ADB functionality tests
 ├── history_docs/                 # Project documentation
+│   └── project_state.md          # Historical project state documentation
 ├── launcher.py                   # Unified application launcher
-├── start.sh                      # Linux startup script
-├── setup.sh                      # Linux setup script
+├── start.sh                      # Linux/macOS startup script
+├── setup.sh                      # Linux/macOS setup script
 ├── README.md                     # Project documentation
+├── ARCHITECTURE.md               # Architecture principles and guidelines
 ├── DEVELOPMENT_RULES.md          # Development guidelines
+├── expansion_plan.md             # Feature expansion roadmap
+├── new_backend_feats.md          # Latest backend monitoring features
 └── LICENSE                       # License information
 ```
 
@@ -1098,8 +1351,12 @@ The backend follows a modular architecture with clear separation of concerns:
 - `backend/core/logger.py`: Centralized logging with categorized output and rotating file handlers
 - `backend/core/diagnostics.py`: Comprehensive ADB diagnostics with multiple test suites
 - `backend/device/`: Feature modules for device-specific functionality
-  - `backend/device/processes_tab/routes.py`: Process management API endpoints (list, details, kill, metrics)
-  - `backend/device/processes_tab/monitoring/dprocess_monitor.py`: Process monitoring class with ADB-based process enumeration, metrics collection, and change detection
+  - `backend/device/processes_tab/routes.py`: Process management API endpoints (list, details, kill, metrics, churn, system monitoring)
+  - `backend/device/processes_tab/monitoring/dprocess_monitor.py`: Process monitoring class with ADB-based process enumeration, metrics collection, change detection, and churn tracking
+  - `backend/device/processes_tab/monitoring/cpu_monitor.py`: CPU usage monitoring with overall percentage and top consumer tracking
+  - `backend/device/processes_tab/monitoring/memory_monitor.py`: System and per-process memory monitoring
+  - `backend/device/processes_tab/monitoring/storage_monitor.py`: Storage partition monitoring and usage statistics
+  - `backend/device/processes_tab/monitoring/network_monitor.py`: Network throughput, connection tracking, and per-process TCP monitoring
 - `backend/frida_mgmt/manage/`: Frida server management modules (discovery, permissions, server lifecycle)
 - `backend/monitoring/health_manager.py`: Health monitoring system with periodic checks
 - `backend/monitoring/process_manager.py`: Process cleanup and PID file management
@@ -1135,7 +1392,7 @@ The application uses a centralized logging system configured via `backend/core/l
 The frontend uses Vue 3 Composition API with a component-based architecture:
 
 **Application Structure:**
-- `frontend/src/App.vue`: Root component with navigation header, global state, and custom Frida download widget with architecture-first selection workflow
+- `frontend/src/App.vue`: Root component with navigation header, global state, and custom Frida download widget
 - `frontend/src/main.js`: Application entry point with router integration
 - `frontend/src/router/index.js`: Vue Router configuration for multi-page navigation with query parameter support
 - `frontend/src/style.css`: Global styles and theme configuration
@@ -1145,7 +1402,7 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - `frontend/src/views/DeviceDetails.vue`: Tab container with compact device header and tab navigation
 - `frontend/src/views/device/`: Feature-based tab modules with components and composables
   - `overview/DeviceTab.vue`: Device management interface with Frida controls, diagnostics, and log streaming
-  - `processes/ProcessesTab.vue`: Process monitoring with real-time updates, search, filter, and inspection
+  - `processes/ProcessesTab.vue`: Process monitoring with real-time updates, system metrics, search, filter, and inspection
   - `packages/PackagesTab.vue`: Placeholder for package management (in development)
   - `files/FilesTab.vue`: Placeholder for file browser (in development)
   - `workshop/WorkshopTab.vue`: Placeholder for analysis workspace (in development)
@@ -1162,6 +1419,8 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - `frontend/src/views/device/processes/composables/useProcesses.js`: Process fetching with auto-refresh
 - `frontend/src/views/device/processes/composables/useProcessFilters.js`: Search, filter, sort, and pagination logic
 - `frontend/src/views/device/processes/composables/useProcessActions.js`: Process inspection and termination actions
+- `frontend/src/views/device/processes/composables/useProcessChurn.js`: Process spawn/kill event tracking
+- `frontend/src/views/device/processes/composables/useSystemMetrics.js`: System resource monitoring (CPU, memory, storage, network)
 
 **Technical Implementation:**
 - Vue 3 Composition API for reactive state management
@@ -1171,15 +1430,16 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - Automatic reconnection with exponential backoff for backend connectivity
 - Client-side routing with Vue Router and query parameter support for deep linking
 - Dynamic component rendering for tab content
-- Tailwind CSS with DaisyUI components for consistent styling, including card-compact variants
+- Tailwind CSS with DaisyUI components for consistent styling
 - Smart auto-streaming: ADB Operations, Frida Install, and Frida Server logs auto-start on page load
 - Manual logcat activation to prevent performance impact from verbose system logs
 - Optimized polling intervals: 15s for device details, 30s for Frida connection tests, 2s for process list
-- Direct GitHub API integration: Fetches latest 10 Frida releases client-side to avoid backend overhead
-- Architecture-first workflow: Users select architecture before version selection for custom downloads
-- Modal-based detail views: Comprehensive information accessible via "Details" buttons without cluttering main interface
+- Direct GitHub API integration: Fetches latest 10 Frida releases client-side
+- Modal-based detail views: Comprehensive information accessible via modals
 - Reusable tab navigation component with keyboard accessibility
-- Composable-based state management for process monitoring with separation of data fetching, filtering, and actions
+- Composable-based state management with separation of data fetching, filtering, and actions
+- System metrics integration with real-time CPU, memory, storage, and network monitoring
+- Process churn visualization with spawn/kill event tracking
 
 ### Dependency Management
 
@@ -1235,7 +1495,7 @@ npm run dev
 
 ### Testing
 
-The project includes a test suite for validating the centralized logging system.
+The project includes test suites for validating core systems.
 
 **Run Logging System Tests:**
 ```bash
@@ -1249,7 +1509,17 @@ This test validates:
 - Log file structure and organization
 - Migration from old log directory structure
 
-The test suite provides comprehensive validation that all logging components correctly use the centralized configuration and write to the appropriate directories.
+**Run ADB Migration Tests:**
+```bash
+python3 tests/test_adb_migration.py
+```
+
+This test validates:
+- ADB manager functionality
+- Device enumeration
+- Command execution and error handling
+
+The test suites provide comprehensive validation that all core components function correctly.
 
 ## Troubleshooting
 
@@ -1262,7 +1532,7 @@ The test suite provides comprehensive validation that all logging components cor
 - Try restarting ADB via the UI or: `adb kill-server && adb start-server`
 
 **Frida Installation Fails:**
-- Select the correct architecture first before choosing a version
+- Select the correct architecture for your device before choosing a version
 - Verify device has sufficient storage space
 - Check that device has root access (for system-level installation)
 - Ensure selected architecture matches device architecture
@@ -1276,7 +1546,7 @@ The test suite provides comprehensive validation that all logging components cor
 - Backend will auto-reconnect with exponential backoff
 
 **Health Checks Failing:**
-- Check logs in `logs/backend/health_monitor.log`
+- Check logs in `logs/application/` directory
 - Verify ADB server is running
 - Ensure no port conflicts on 8000
 
@@ -1287,6 +1557,17 @@ The test suite provides comprehensive validation that all logging components cor
 - Verify backend is running and accessible
 - Check browser console for API errors
 - Use the ADB restart button if connection is lost
+
+**Processes Tab Not Loading:**
+- Verify device is connected and online
+- Check that backend process monitoring endpoints are accessible
+- Ensure device has sufficient resources to handle ADB queries
+- Try disabling auto-refresh temporarily if experiencing performance issues
+
+**System Metrics Not Updating:**
+- Verify device has proper root access for detailed metrics
+- Check network tab in browser developer tools for failed API requests
+- Ensure device is not in deep sleep or power saving mode
 
 **Logs Not Streaming:**
 - Most debug logs (ADB Operations, Frida Install, Frida Server) auto-start on page load

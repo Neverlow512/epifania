@@ -45,6 +45,52 @@
             </div>
           </div>
         </div>
+
+        <div v-if="memoryDetails" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="text-sm text-slate-400 col-span-2 md:col-span-4">Memory Breakdown</div>
+          <div class="bg-black/30 p-3 rounded border border-primary/20 text-xs space-y-1">
+            <div class="text-slate-400">RSS</div>
+            <div class="text-white">{{ memoryDetails.rss_mb }} MB</div>
+          </div>
+          <div class="bg-black/30 p-3 rounded border border-primary/20 text-xs space-y-1">
+            <div class="text-slate-400">VSZ</div>
+            <div class="text-white">{{ memoryDetails.vsz_mb }} MB</div>
+          </div>
+          <div class="bg-black/30 p-3 rounded border border-primary/20 text-xs space-y-1">
+            <div class="text-slate-400">Peak</div>
+            <div class="text-white">{{ memoryDetails.peak_mb }} MB</div>
+          </div>
+          <div class="bg-black/30 p-3 rounded border border-primary/20 text-xs space-y-1">
+            <div class="text-slate-400">High-water</div>
+            <div class="text-white">{{ memoryDetails.hwm_mb }} MB</div>
+          </div>
+        </div>
+
+        <div v-if="networkDetails && networkDetails.connections && networkDetails.connections.length" class="space-y-2">
+          <div class="text-sm text-slate-400">Network Connections ({{ networkDetails.connections.length }})</div>
+          <div class="bg-black/30 p-3 rounded border border-primary/20 max-h-48 overflow-y-auto">
+            <table class="table table-xs">
+              <thead>
+                <tr class="text-slate-400">
+                  <th>Local</th>
+                  <th>Remote</th>
+                  <th class="text-right">State</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="conn in networkDetails.connections"
+                  :key="conn.local + '-' + conn.remote + '-' + conn.state"
+                  class="border-neutral-800"
+                >
+                  <td class="text-slate-200 truncate">{{ conn.local }}</td>
+                  <td class="text-slate-200 truncate">{{ conn.remote }}</td>
+                  <td class="text-right text-slate-300">{{ conn.state }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
       
       <div class="modal-action">
@@ -73,6 +119,14 @@ export default {
     loading: {
       type: Boolean,
       default: false
+    },
+    memoryDetails: {
+      type: Object,
+      default: null
+    },
+    networkDetails: {
+      type: Object,
+      default: null
     }
   },
   emits: ['close']

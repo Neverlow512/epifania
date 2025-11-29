@@ -26,6 +26,7 @@
           v-for="process in paginatedProcesses" 
           :key="process.pid"
           class="hover:bg-primary/5 border-b border-neutral-800"
+          :class="process.pid === focusedPid ? 'bg-primary/10 border-primary/40' : ''"
         >
           <td class="font-mono text-primary">{{ process.pid }}</td>
           <td class="text-white">
@@ -124,6 +125,10 @@ export default {
     loading: {
       type: Boolean,
       default: false
+    },
+    focusedPid: {
+      type: Number,
+      default: null
     }
   },
   emits: ['inspect', 'kill', 'page-change'],

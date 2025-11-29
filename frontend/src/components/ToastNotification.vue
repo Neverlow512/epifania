@@ -1,8 +1,9 @@
 <template>
   <div class="toast-container">
+    <!-- Regular toasts (success, info, warning) -->
     <transition-group name="toast" tag="div">
-      <div 
-        v-for="toast in toasts" 
+      <div
+        v-for="toast in regularToasts"
         :key="toast.id"
         class="toast-item"
         :class="getToastClass(toast.type)"
@@ -12,9 +13,6 @@
             <svg v-if="toast.type === 'success'" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <svg v-else-if="toast.type === 'error'" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
             <svg v-else-if="toast.type === 'warning'" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
@@ -22,14 +20,14 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          
+
           <div class="toast-message">
             <div v-if="toast.title" class="toast-title">{{ toast.title }}</div>
             <div class="toast-text">{{ toast.message }}</div>
           </div>
-          
+
           <div class="toast-actions">
-            <button 
+            <button
               v-if="!toast.pinned"
               type="button"
               class="toast-pin-btn"
@@ -40,7 +38,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
               </svg>
             </button>
-            <button 
+            <button
               v-else
               type="button"
               class="toast-pin-btn pinned"
@@ -51,7 +49,7 @@
                 <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
               </svg>
             </button>
-            <button 
+            <button
               type="button"
               class="toast-close-btn"
               @click="removeToast(toast.id)"
@@ -63,25 +61,86 @@
             </button>
           </div>
         </div>
-        
+
         <div v-if="!toast.pinned" class="toast-progress">
-          <div 
-            class="toast-progress-bar" 
+          <div
+            class="toast-progress-bar"
             :style="{ animationDuration: toast.duration + 'ms' }"
           ></div>
         </div>
+      </div>
+    </transition-group>
+
+    <!-- Aggregated error toasts -->
+    <transition-group name="toast" tag="div">
+      <div
+        v-for="toast in errorToasts"
+        :key="'error-' + toast.id"
+        class="toast-aggregate"
+      >
+        <button
+          type="button"
+          class="toast-bubble toast-error"
+          @click="toggleExpanded(toast.id)"
+        >
+          <span class="toast-bubble-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </span>
+          <span class="toast-bubble-count">
+            {{ toast.count }}
+          </span>
+        </button>
+
+        <transition name="toast-panel">
+          <div
+            v-if="toast.expanded"
+            class="toast-panel toast-error"
+          >
+            <div class="toast-panel-content">
+              <div class="toast-panel-text">
+                <div v-if="toast.title" class="toast-title">
+                  {{ toast.title }}
+                </div>
+                <div class="toast-text">
+                  {{ toast.message }}
+                </div>
+              </div>
+              <button
+                type="button"
+                class="toast-close-btn"
+                @click="removeToast(toast.id)"
+                title="Close"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </transition>
       </div>
     </transition-group>
   </div>
 </template>
 
 <script>
+import { computed } from 'vue'
 import { useToast } from '../composables/useToast'
 
 export default {
   name: 'ToastNotification',
   setup() {
     const { toasts, removeToast, pinToast, unpinToast } = useToast()
+
+    const regularToasts = computed(() =>
+      toasts.value.filter(t => t.type !== 'error')
+    )
+
+    const errorToasts = computed(() =>
+      toasts.value.filter(t => t.type === 'error')
+    )
 
     const getToastClass = (type) => {
       const classes = {
@@ -93,12 +152,21 @@ export default {
       return classes[type] || 'toast-info'
     }
 
+    const toggleExpanded = (id) => {
+      const toast = errorToasts.value.find(t => t.id === id)
+      if (toast) {
+        toast.expanded = !toast.expanded
+      }
+    }
+
     return {
-      toasts,
+      regularToasts,
+      errorToasts,
       removeToast,
       pinToast,
       unpinToast,
-      getToastClass
+      getToastClass,
+      toggleExpanded
     }
   }
 }
@@ -113,7 +181,6 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  max-width: 400px;
   pointer-events: none;
 }
 
@@ -226,18 +293,6 @@ export default {
   background: #10b981;
 }
 
-.toast-error {
-  border-left: 4px solid #ef4444;
-}
-
-.toast-error .toast-icon {
-  color: #ef4444;
-}
-
-.toast-error .toast-progress-bar {
-  background: #ef4444;
-}
-
 .toast-warning {
   border-left: 4px solid #f59e0b;
 }
@@ -262,9 +317,72 @@ export default {
   background: #3b82f6;
 }
 
+.toast-aggregate {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.toast-bubble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9999px;
+  border-width: 2px;
+  border-style: solid;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  padding: 0;
+  gap: 0.25rem;
+}
+
+.toast-bubble-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+.toast-bubble-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: inherit;
+}
+
+.toast-panel {
+  background: rgba(17, 24, 39, 0.98);
+  backdrop-filter: blur(12px);
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  min-width: 260px;
+  max-width: 360px;
+}
+
+.toast-panel-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.toast-panel-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-error {
+  border-left: 4px solid #ef4444;
+  color: #ef4444;
+}
+
 .toast-enter-active,
 .toast-leave-active {
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .toast-enter-from {
@@ -274,11 +392,22 @@ export default {
 
 .toast-leave-to {
   opacity: 0;
-  transform: translateX(100%) scale(0.8);
+  transform: translateX(100%) scale(0.9);
 }
 
-.toast-move {
-  transition: transform 0.3s ease;
+.toast-panel-enter-active,
+.toast-panel-leave-active {
+  transition: all 0.15s ease;
+}
+
+.toast-panel-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.toast-panel-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
 }
 </style>
 

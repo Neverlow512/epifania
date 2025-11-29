@@ -22,6 +22,7 @@
                 :totalCount="filteredProcesses.length"
                 :currentPage="currentPage"
                 :loading="loading"
+                :focusedPid="selectedProcess ? selectedProcess.pid : null"
                 @inspect="showProcessDetails"
                 @kill="confirmKill"
                 @page-change="currentPage = $event"
@@ -35,15 +36,25 @@
       <div class="lg:col-span-2">
         <ProcessStatsBar
           :stats="stats"
+          :cpu="cpu"
+          :memoryMetrics="memory"
+          :storageMetrics="storage"
+          :storagePartitions="partitions"
+          :networkMetrics="network"
+          :networkConnections="networkConnections"
+          :networkConnectionsCount="networkConnectionsCount"
+          :churn="churn"
+          :churnWindowSeconds="churnWindowSeconds"
           :autoRefresh="autoRefresh"
           :refreshInterval="refreshInterval"
           :lastUpdate="lastUpdate"
           :loading="loading"
           :processHistory="processHistory"
           :memoryHistory="memoryHistory"
-          @refresh="fetchProcesses"
+          @refresh="handleRefresh"
           @toggle-auto-refresh="toggleAutoRefresh"
           @update-refresh-interval="setRefreshInterval"
+          @load-network-connections="loadNetworkConnections"
         />
       </div>
     </div>
@@ -52,6 +63,8 @@
       :show="showDetailsModal"
       :process="selectedProcess"
       :details="processDetails"
+      :memoryDetails="processMemoryDetails"
+      :networkDetails="processNetworkDetails"
       :loading="loadingDetails"
       @close="closeDetailsModal"
     />
@@ -75,6 +88,8 @@ import ProcessKillModal from './components/ProcessKillModal.vue'
 import { useProcesses } from './composables/useProcesses'
 import { useProcessFilters } from './composables/useProcessFilters'
 import { useProcessActions } from './composables/useProcessActions'
+import { useSystemMetrics } from './composables/useSystemMetrics'
+import { useProcessChurn } from './composables/useProcessChurn'
 
 export default {
   name: 'ProcessesTab',
@@ -93,6 +108,24 @@ export default {
   },
   setup(props) {
     const {
+      cpu,
+      memory,
+      storage,
+      partitions,
+      network,
+      networkConnections,
+      networkConnectionsCount,
+      fetchSystemMetrics,
+      fetchNetworkConnections
+    } = useSystemMetrics(props.device.serial)
+
+    const {
+      churn,
+      churnWindowSeconds,
+      fetchProcessChurn
+    } = useProcessChurn(props.device.serial)
+
+    const {
       processes,
       stats,
       loading,
@@ -100,11 +133,14 @@ export default {
       autoRefresh,
       refreshInterval,
       fetchProcesses,
+      refreshAll,
       toggleAutoRefresh,
       processHistory,
       memoryHistory,
       setRefreshInterval
-    } = useProcesses(props.device.serial)
+    } = useProcesses(props.device.serial, {
+      extraFetchers: [fetchSystemMetrics, fetchProcessChurn]
+    })
 
     const {
       searchQuery,
@@ -123,6 +159,8 @@ export default {
       showDetailsModal,
       loadingDetails,
       processDetails,
+      processMemoryDetails,
+      processNetworkDetails,
       processToKill,
       showKillModal,
       killing,
@@ -132,6 +170,14 @@ export default {
       closeKillModal,
       killProcess
     } = useProcessActions(props.device.serial, fetchProcesses)
+
+    const handleRefresh = async () => {
+      await refreshAll()
+    }
+
+    const loadNetworkConnections = async () => {
+      await fetchNetworkConnections()
+    }
 
     return {
       stats,
@@ -144,6 +190,15 @@ export default {
       processHistory,
       memoryHistory,
       setRefreshInterval,
+      cpu,
+      memory,
+      storage,
+      partitions,
+      network,
+      networkConnections,
+      networkConnectionsCount,
+      churn,
+      churnWindowSeconds,
       searchQuery,
       filterType,
       sortBy,
@@ -157,6 +212,8 @@ export default {
       showDetailsModal,
       loadingDetails,
       processDetails,
+      processMemoryDetails,
+      processNetworkDetails,
       processToKill,
       showKillModal,
       killing,
@@ -164,7 +221,9 @@ export default {
       closeDetailsModal,
       confirmKill,
       closeKillModal,
-      killProcess
+      killProcess,
+      handleRefresh,
+      loadNetworkConnections
     }
   }
 }
