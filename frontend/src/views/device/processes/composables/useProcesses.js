@@ -3,7 +3,7 @@ import axios from 'axios'
 import { useToast } from '../../../../composables/useToast'
 
 export function useProcesses(deviceSerial, options = {}) {
-  const { extraFetchers = [], getSystemMemoryMb = null } = options
+  const { extraFetchers = [] } = options
   const toast = useToast()
   const processes = ref([])
   const stats = ref({})

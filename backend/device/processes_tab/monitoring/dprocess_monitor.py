@@ -135,9 +135,6 @@ class ProcessMonitor:
                     prev_mem = process['memory_mb']
                 process['memory_delta_mb'] = round(process['memory_mb'] - prev_mem, 2)
             
-            current_snapshot = {p['pid']: p for p in processes}
-            self.previous_snapshots[device_serial] = current_snapshot
-            
             return processes
             
         except Exception as e:
@@ -459,14 +456,31 @@ class ProcessMonitor:
         previous = self.previous_snapshots.get(device_serial, {})
         current = {p['pid']: p for p in current_processes}
         
+        # Update snapshot immediately to guarantee it's always updated per request
+        self.previous_snapshots[device_serial] = current
+        
         previous_pids = set(previous.keys())
         current_pids = set(current.keys())
         
-        spawned_pids = current_pids - previous_pids
-        killed_pids = previous_pids - current_pids
+        spawned = []
+        killed = []
+        changed = []
         
-        spawned = [current[pid] for pid in spawned_pids]
-        killed = [previous[pid] for pid in killed_pids]
+        # Detect killed processes and PID reuse
+        for pid in previous_pids:
+            prev = previous[pid]
+            if pid not in current_pids:
+                killed.append(prev)
+            else:
+                curr = current[pid]
+                # PID reuse: different name or user means old process died, new one spawned
+                if prev.get('name') != curr.get('name') or prev.get('user') != curr.get('user'):
+                    killed.append(prev)
+                    spawned.append(curr)
+        
+        # Detect newly spawned processes (PIDs not in previous snapshot)
+        for pid in current_pids - previous_pids:
+            spawned.append(current[pid])
         
         # Record churn events (only if we have a previous snapshot to compare)
         if previous:
@@ -475,10 +489,14 @@ class ProcessMonitor:
             for proc in killed:
                 self.churn_tracker.record_kill(device_serial, proc)
         
-        changed = []
+        # Check for significant resource changes (only for same process identity)
         for pid in previous_pids & current_pids:
             prev = previous[pid]
             curr = current[pid]
+            
+            # Skip if PID was reused by different process
+            if prev.get('name') != curr.get('name') or prev.get('user') != curr.get('user'):
+                continue
             
             cpu_diff = curr.get('cpu_percent', 0) - prev.get('cpu_percent', 0)
             mem_diff = curr.get('memory_mb', 0) - prev.get('memory_mb', 0)

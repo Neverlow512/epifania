@@ -2,11 +2,6 @@
 
 A GUI-based Dynamic Instrumentation Platform wrapping Frida and ADB for security researchers.
 
-## Known Issues
-
-- **PID reuse in `detect_changes()`**: The `detect_changes()` method in `backend/device/processes_tab/monitoring/dprocess_monitor.py` (lines 453-492) has a PID reuse issue. When a process exits and a new process gets the same PID, the method incorrectly treats it as a "changed" process rather than detecting a kill+spawn event. This can cause false positives in change detection and missing spawn/kill events. Fix requires comparing name+user before treating same-PID entries as the same process.
-
-- **Unused `getSystemMemoryMb` option**: The `useProcesses.js` composable accepts a `getSystemMemoryMb` option that is never used. This is dead code and can be safely removed.
 
 ## Project Status
 
