@@ -56,6 +56,8 @@ A GUI-based Dynamic Instrumentation Platform wrapping Frida and ADB for security
 - ✅ Educational help modals for CPU, Memory, and Process List interpretation
 - ✅ Modular frontend architecture with feature-based directory structure
 - ✅ Unified launcher script for cross-platform deployment
+- ✅ Multi-tab consistency with server-side caching for CPU and Network metrics
+- ✅ Polling session management to prevent race conditions across browser tabs
 
 **In Development:**
 - 🔄 Packages tab for application catalog and lifecycle control
@@ -722,6 +724,77 @@ GET /api/devices/{device_id}/processes/churn
 
 Retrieves process spawn/kill statistics over a time window.
 
+### Session Management
+
+#### Register Polling Session
+
+```
+POST /api/devices/{device_id}/session/register
+```
+
+Registers a browser tab as a polling client. The first client becomes "primary" and controls the polling interval.
+
+**Request Body:**
+```json
+{
+  "client_id": "unique-tab-identifier",
+  "interval_ms": 2000
+}
+```
+
+**Response:**
+```json
+{
+  "is_primary": true,
+  "message": "Primary session established",
+  "active_interval_ms": 2000,
+  "client_id": "unique-tab-identifier"
+}
+```
+
+Secondary tabs attempting to change the interval receive:
+```json
+{
+  "is_primary": false,
+  "message": "Another tab is controlling the polling interval (2000ms). Close other tabs to change the interval.",
+  "active_interval_ms": 2000,
+  "client_id": "secondary-tab-id"
+}
+```
+
+#### Unregister Polling Session
+
+```
+POST /api/devices/{device_id}/session/unregister
+```
+
+Unregisters a polling session when a tab closes. If the primary client leaves, another client is promoted.
+
+**Request Body:**
+```json
+{
+  "client_id": "unique-tab-identifier",
+  "interval_ms": 2000
+}
+```
+
+#### Get Session Info
+
+```
+GET /api/devices/{device_id}/session/info
+```
+
+Returns current session status for a device.
+
+**Response:**
+```json
+{
+  "active": true,
+  "primary_client": "tab-1234",
+  "interval_ms": 2000,
+  "client_count": 2
+}
+
 **Query Parameters:**
 - `window` (optional): Time window in seconds (default: 60)
 
@@ -1181,6 +1254,8 @@ The device details interface is organized into tabbed sections for clear separat
 - **Change Detection**: Track spawned, killed, and resource-intensive processes between refreshes
 - **Metrics Storage**: Historical process count and system memory data with configurable retention (120 data points); memory history uses actual system RAM (Total - Available) instead of summed RSS
 - **Auto-Refresh**: Configurable refresh interval (default 2 seconds) with toggle control
+- **Multi-Tab Consistency**: Server-side caching prevents race conditions when multiple browser tabs poll simultaneously
+- **Session Management**: First tab becomes "primary" and controls the polling interval; secondary tabs receive read-only access with visual indicators
 
 ### Health Monitoring & Diagnostics
 
@@ -1266,7 +1341,8 @@ epifania/
 │   │           ├── cpu_monitor.py       # CPU usage monitoring
 │   │           ├── memory_monitor.py    # Memory usage monitoring
 │   │           ├── storage_monitor.py   # Storage monitoring
-│   │           └── network_monitor.py   # Network monitoring
+│   │           ├── network_monitor.py   # Network monitoring
+│   │           └── cache.py             # Thread-safe metrics caching and session management
 │   ├── monitoring/               # Health and process monitoring
 │   │   ├── __init__.py
 │   │   ├── health_manager.py     # Health check system
@@ -1320,7 +1396,8 @@ epifania/
 │   │   │       │       ├── useProcesses.js
 │   │   │       │       ├── useProcessFilters.js     # Includes kernel thread filtering
 │   │   │       │       ├── useProcessChurn.js
-│   │   │       │       └── useSystemMetrics.js
+│   │   │       │       ├── useSystemMetrics.js
+│   │   │       │       └── usePollingSession.js     # Multi-tab session management
 │   │   │       ├── packages/     # Package management (placeholder)
 │   │   │       │   └── PackagesTab.vue
 │   │   │       ├── files/        # File browser (placeholder)
@@ -1386,6 +1463,7 @@ The backend follows a modular architecture with clear separation of concerns:
   - `backend/device/processes_tab/monitoring/memory_monitor.py`: System and per-process memory monitoring
   - `backend/device/processes_tab/monitoring/storage_monitor.py`: Storage partition monitoring and usage statistics
   - `backend/device/processes_tab/monitoring/network_monitor.py`: Network throughput, connection tracking, and per-process TCP monitoring
+  - `backend/device/processes_tab/monitoring/cache.py`: Thread-safe metrics caching (`MetricsCache`) and polling session management (`PollingSession`) for multi-tab consistency
 - `backend/frida_mgmt/manage/`: Frida server management modules (discovery, permissions, server lifecycle)
 - `backend/monitoring/health_manager.py`: Health monitoring system with periodic checks
 - `backend/monitoring/process_manager.py`: Process cleanup and PID file management
@@ -1450,6 +1528,7 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - `frontend/src/views/device/processes/composables/useProcessActions.js`: Process inspection and termination actions
 - `frontend/src/views/device/processes/composables/useProcessChurn.js`: Process spawn/kill event tracking
 - `frontend/src/views/device/processes/composables/useSystemMetrics.js`: System resource monitoring (CPU, memory, storage, network)
+- `frontend/src/views/device/processes/composables/usePollingSession.js`: Multi-tab session management with primary/secondary role tracking
 
 **Process Tab Components:**
 - `ProcessControlBar.vue`: Search, filter, sort controls with kernel thread toggle and Details help modal
@@ -1477,6 +1556,8 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - System metrics integration with real-time CPU, memory, storage, and network monitoring
 - Process churn visualization with spawn/kill event tracking
 - Android process state integration via ActivityManager for accurate state classification
+- Multi-tab consistency: Server-side caching ensures all browser tabs see identical metrics
+- Session management: Primary tab controls polling interval; secondary tabs show "Secondary" badge with disabled interval controls
 
 ### Dependency Management
 
