@@ -3,7 +3,7 @@ import axios from 'axios'
 import { useToast } from '../../../../composables/useToast'
 
 export function useProcesses(deviceSerial, options = {}) {
-  const { extraFetchers = [] } = options
+  const { extraFetchers = [], getSystemMemoryMb = null } = options
   const toast = useToast()
   const processes = ref([])
   const stats = ref({})
@@ -27,7 +27,6 @@ export function useProcesses(deviceSerial, options = {}) {
       const total = response.data.stats?.total ?? 0
       const user = response.data.stats?.user ?? 0
       const system = response.data.stats?.system ?? 0
-      const totalMemoryMb = response.data.stats?.total_memory_mb ?? 0
       const timestamp = new Date().toISOString()
 
       processHistory.value.push({
@@ -36,22 +35,26 @@ export function useProcesses(deviceSerial, options = {}) {
         user,
         system
       })
-      memoryHistory.value.push({
-        timestamp,
-        memoryMb: totalMemoryMb
-      })
 
       if (processHistory.value.length > maxHistoryPoints) {
         processHistory.value.splice(0, processHistory.value.length - maxHistoryPoints)
-      }
-      if (memoryHistory.value.length > maxHistoryPoints) {
-        memoryHistory.value.splice(0, memoryHistory.value.length - maxHistoryPoints)
       }
     } catch (err) {
       console.error('Failed to fetch processes:', err)
       toast.error('Failed to fetch processes')
     } finally {
       loading.value = false
+    }
+  }
+
+  const updateMemoryHistory = (usedMb) => {
+    const timestamp = new Date().toISOString()
+    memoryHistory.value.push({
+      timestamp,
+      memoryMb: usedMb
+    })
+    if (memoryHistory.value.length > maxHistoryPoints) {
+      memoryHistory.value.splice(0, memoryHistory.value.length - maxHistoryPoints)
     }
   }
 
@@ -119,6 +122,7 @@ export function useProcesses(deviceSerial, options = {}) {
     fetchProcesses,
     refreshAll,
     toggleAutoRefresh,
-    setRefreshInterval
+    setRefreshInterval,
+    updateMemoryHistory
   }
 }

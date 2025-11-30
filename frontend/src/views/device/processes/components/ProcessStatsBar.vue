@@ -96,7 +96,14 @@
               </svg>
             </div>
             <span class="text-xs text-slate-400 font-medium">Memory</span>
-            <span class="ml-auto text-[10px] text-slate-500">{{ memoryUsedPercent }}%</span>
+            <button
+              type="button"
+              class="ml-auto text-[9px] text-slate-500 hover:text-emerald-400 transition-colors border border-slate-700 hover:border-emerald-500/50 rounded px-1.5 py-0.5"
+              @click="showMemoryDetails = true"
+            >
+              Details
+            </button>
+            <span class="text-[10px] text-slate-500">{{ memoryUsedPercent }}%</span>
           </div>
           <div class="flex items-baseline gap-1 mb-1">
             <span class="text-lg font-semibold text-white font-mono">{{ formatMemoryCompact(memoryActualUsed) }}</span>
@@ -657,6 +664,173 @@
         </div>
       </div>
     </Teleport>
+
+    <!-- Memory Details Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showMemoryDetails"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      >
+        <div
+          class="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          @click="showMemoryDetails = false"
+        ></div>
+        <div class="relative bg-neutral-900 border border-primary/30 rounded-xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-neutral-800">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                <svg class="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-lg font-semibold text-white">Understanding Memory Metrics</h3>
+                <p class="text-xs text-slate-500">How memory usage is measured on Android devices</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm btn-circle"
+              @click="showMemoryDetails = false"
+            >
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="p-4 overflow-y-auto max-h-[calc(85vh-80px)] space-y-6 text-sm">
+            <section class="space-y-2">
+              <h4 class="text-base font-medium text-white flex items-center gap-2">
+                <span class="w-6 h-6 rounded bg-emerald-500/20 flex items-center justify-center text-xs text-emerald-400">1</span>
+                Two Different Memory Metrics
+              </h4>
+              <p class="text-slate-400 leading-relaxed">
+                You'll notice two memory values that don't match: the <span class="text-emerald-400">Memory widget</span> (this card) and the <span class="text-white">per-process memory</span> in the process list. Both are correct, but they measure different things.
+              </p>
+              <div class="bg-black/40 rounded-lg p-3 border border-neutral-800 space-y-3">
+                <div class="flex items-start gap-3">
+                  <div class="w-8 h-8 rounded bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                    <span class="text-emerald-400 text-xs font-bold">W</span>
+                  </div>
+                  <div>
+                    <div class="text-emerald-400 font-medium text-xs">Memory Widget (This Card)</div>
+                    <div class="text-slate-400 text-xs mt-1">Shows actual RAM usage from <code class="text-emerald-400 bg-emerald-500/10 px-1 rounded">/proc/meminfo</code>. This is the real amount of physical memory your device is using.</div>
+                    <div class="text-slate-500 text-[11px] mt-1">Use this to answer: "How much RAM is my device using?"</div>
+                  </div>
+                </div>
+                <div class="flex items-start gap-3">
+                  <div class="w-8 h-8 rounded bg-violet-500/20 flex items-center justify-center flex-shrink-0">
+                    <span class="text-violet-400 text-xs font-bold">P</span>
+                  </div>
+                  <div>
+                    <div class="text-violet-400 font-medium text-xs">Process List (RSS)</div>
+                    <div class="text-slate-400 text-xs mt-1">Shows RSS (Resident Set Size) per process. This includes shared libraries that are counted multiple times across processes.</div>
+                    <div class="text-slate-500 text-[11px] mt-1">Use this to answer: "Which process is using the most memory?" (relative comparison)</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="space-y-2">
+              <h4 class="text-base font-medium text-white flex items-center gap-2">
+                <span class="w-6 h-6 rounded bg-amber-500/20 flex items-center justify-center text-xs text-amber-400">2</span>
+                Why Don't the Numbers Add Up?
+              </h4>
+              <p class="text-slate-400 leading-relaxed">
+                If you sum all process RSS values, you'll get a number <span class="text-white">much larger</span> than actual RAM usage. This is because of <span class="text-amber-400">shared memory</span>.
+              </p>
+              <div class="bg-black/40 rounded-lg p-4 border border-neutral-800 font-mono text-xs">
+                <div class="text-slate-500 mb-3">Example: Shared Library (libc.so)</div>
+                <div class="grid grid-cols-3 gap-2 mb-3">
+                  <div class="bg-violet-500/20 border border-violet-500/30 rounded p-2 text-center">
+                    <div class="text-violet-400 text-[10px]">Process A</div>
+                    <div class="text-white">+2 MB</div>
+                  </div>
+                  <div class="bg-violet-500/20 border border-violet-500/30 rounded p-2 text-center">
+                    <div class="text-violet-400 text-[10px]">Process B</div>
+                    <div class="text-white">+2 MB</div>
+                  </div>
+                  <div class="bg-violet-500/20 border border-violet-500/30 rounded p-2 text-center">
+                    <div class="text-violet-400 text-[10px]">Process C</div>
+                    <div class="text-white">+2 MB</div>
+                  </div>
+                </div>
+                <div class="space-y-1 text-slate-400 border-t border-neutral-700 pt-3">
+                  <div>Sum of RSS: 2 + 2 + 2 = <span class="text-red-400">6 MB</span> (overcounted)</div>
+                  <div>Actual RAM used: <span class="text-emerald-400">2 MB</span> (shared once)</div>
+                </div>
+              </div>
+              <p class="text-slate-400 leading-relaxed">
+                The same library loaded by 100 processes still only uses RAM once, but RSS counts it 100 times.
+              </p>
+            </section>
+
+            <section class="space-y-2">
+              <h4 class="text-base font-medium text-white flex items-center gap-2">
+                <span class="w-6 h-6 rounded bg-blue-500/20 flex items-center justify-center text-xs text-blue-400">3</span>
+                Memory Over Time Graph
+              </h4>
+              <p class="text-slate-400 leading-relaxed">
+                The "Memory over time" graph shows <span class="text-emerald-400">actual system memory usage</span> (Total - Available), not the sum of process RSS. This gives you an accurate view of how your device's RAM usage changes over time.
+              </p>
+              <div class="bg-black/40 rounded-lg p-3 border border-neutral-800 space-y-2 text-xs">
+                <div class="flex items-start gap-2">
+                  <span class="text-slate-500 w-20 flex-shrink-0">Formula:</span>
+                  <span class="text-slate-300"><code class="text-emerald-400 bg-emerald-500/10 px-1 rounded">Used = Total - Available</code></span>
+                </div>
+                <div class="flex items-start gap-2">
+                  <span class="text-slate-500 w-20 flex-shrink-0">Source:</span>
+                  <span class="text-slate-400"><code class="text-blue-400 bg-blue-500/10 px-1 rounded">/proc/meminfo</code></span>
+                </div>
+              </div>
+            </section>
+
+            <section class="space-y-2">
+              <h4 class="text-base font-medium text-white flex items-center gap-2">
+                <span class="w-6 h-6 rounded bg-violet-500/20 flex items-center justify-center text-xs text-violet-400">4</span>
+                Memory Metric Types
+              </h4>
+              <div class="space-y-2">
+                <div class="bg-black/40 rounded p-2 border border-neutral-800">
+                  <span class="text-violet-400 font-medium">RSS (Resident Set Size)</span>
+                  <p class="text-slate-500 text-xs mt-1">Memory pages in RAM for this process. Includes shared libraries (counted per-process). Fast to read. Used by ps, top, htop.</p>
+                </div>
+                <div class="bg-black/40 rounded p-2 border border-neutral-800">
+                  <span class="text-sky-400 font-medium">PSS (Proportional Set Size)</span>
+                  <p class="text-slate-500 text-xs mt-1">RSS but shared pages divided by number of sharing processes. Sum of PSS = actual usage. Slower to read. Used by Android's dumpsys meminfo.</p>
+                </div>
+                <div class="bg-black/40 rounded p-2 border border-neutral-800">
+                  <span class="text-amber-400 font-medium">USS (Unique Set Size)</span>
+                  <p class="text-slate-500 text-xs mt-1">Memory unique to this process (not shared). Shows what would be freed if process exits.</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="space-y-2">
+              <h4 class="text-base font-medium text-white flex items-center gap-2">
+                <span class="w-6 h-6 rounded bg-sky-500/20 flex items-center justify-center text-xs text-sky-400">5</span>
+                Which Metric Should I Trust?
+              </h4>
+              <div class="bg-black/40 rounded-lg p-3 border border-neutral-800 space-y-2 text-xs">
+                <div class="flex items-start gap-2">
+                  <span class="text-emerald-400 w-40 flex-shrink-0">"How much RAM is used?"</span>
+                  <span class="text-slate-300">Memory Widget (this card)</span>
+                </div>
+                <div class="flex items-start gap-2">
+                  <span class="text-emerald-400 w-40 flex-shrink-0">"Which process is biggest?"</span>
+                  <span class="text-slate-300">Process list RSS (compare relatively)</span>
+                </div>
+                <div class="flex items-start gap-2">
+                  <span class="text-emerald-400 w-40 flex-shrink-0">"Is RAM usage growing?"</span>
+                  <span class="text-slate-300">Memory over time graph</span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -734,7 +908,8 @@ export default {
     return {
       activeTab: 'Overview',
       tabs: ['Overview', 'CPU', 'Network', 'Activity'],
-      showCpuDetails: false
+      showCpuDetails: false,
+      showMemoryDetails: false
     }
   },
   computed: {

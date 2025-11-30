@@ -8,6 +8,31 @@ from core.adb_manager import ADBManager
 
 logger = get_logger(__name__, "device")
 
+# Android ActivityManager process state constants mapped to user-friendly labels
+PROC_STATE_MAP = {
+    0: 'persistent',    # PROCESS_STATE_PERSISTENT
+    1: 'persistent',    # PROCESS_STATE_PERSISTENT_UI
+    2: 'foreground',    # PROCESS_STATE_TOP
+    3: 'foreground',    # PROCESS_STATE_FOREGROUND_SERVICE_LOCATION (API 29+)
+    4: 'visible',       # PROCESS_STATE_BOUND_FOREGROUND_SERVICE
+    5: 'service',       # PROCESS_STATE_FOREGROUND_SERVICE
+    6: 'bound',         # PROCESS_STATE_BOUND_TOP
+    7: 'visible',       # PROCESS_STATE_IMPORTANT_FOREGROUND
+    8: 'background',    # PROCESS_STATE_IMPORTANT_BACKGROUND
+    9: 'background',    # PROCESS_STATE_TRANSIENT_BACKGROUND
+    10: 'background',   # PROCESS_STATE_BACKUP
+    11: 'service',      # PROCESS_STATE_SERVICE
+    12: 'receiver',     # PROCESS_STATE_RECEIVER
+    13: 'cached',       # PROCESS_STATE_TOP_SLEEPING (API 23+)
+    14: 'background',   # PROCESS_STATE_HEAVY_WEIGHT
+    15: 'cached',       # PROCESS_STATE_HOME
+    16: 'cached',       # PROCESS_STATE_LAST_ACTIVITY
+    17: 'cached',       # PROCESS_STATE_CACHED_ACTIVITY
+    18: 'cached',       # PROCESS_STATE_CACHED_ACTIVITY_CLIENT
+    19: 'cached',       # PROCESS_STATE_CACHED_RECENT
+    20: 'cached',       # PROCESS_STATE_CACHED_EMPTY
+}
+
 
 class ChurnTracker:
     # Tracks process spawn/kill events with timestamps for time-windowed counts
@@ -96,6 +121,15 @@ class ProcessMonitor:
             processes = self._parse_process_list(result)
             logger.info(f"Found {len(processes)} processes on {device_serial}")
             
+            android_states = self._get_android_process_states(device_serial)
+            self._apply_android_states(processes, android_states)
+            
+            previous = self.previous_snapshots.get(device_serial, {})
+            for process in processes:
+                pid = process['pid']
+                prev_mem = previous.get(pid, {}).get('memory_mb', process['memory_mb'])
+                process['memory_delta_mb'] = round(process['memory_mb'] - prev_mem, 2)
+            
             current_snapshot = {p['pid']: p for p in processes}
             self.previous_snapshots[device_serial] = current_snapshot
             
@@ -104,6 +138,82 @@ class ProcessMonitor:
         except Exception as e:
             logger.error(f"Failed to list processes for {device_serial}: {str(e)}")
             return []
+    
+    def _get_android_process_states(self, device_serial: str) -> Dict[int, Dict]:
+        # Fetches Android process states via dumpsys activity processes
+        try:
+            result = self.adb_manager.execute_shell(
+                device_serial,
+                "dumpsys activity processes 2>/dev/null | grep -E '(ProcessRecord|pid=|curProcState=|cached=)'"
+            )
+            
+            if not result:
+                return {}
+            
+            states = {}
+            current_pid = None
+            current_info = {}
+            
+            for line in result.split('\n'):
+                line = line.strip()
+                
+                if 'ProcessRecord' in line:
+                    if current_pid and current_info:
+                        states[current_pid] = current_info
+                    current_pid = None
+                    current_info = {}
+                    
+                    # Extract process type (*PERS*, *APP*, etc.)
+                    if '*PERS*' in line:
+                        current_info['type'] = 'persistent'
+                    elif '*APP*' in line:
+                        current_info['type'] = 'app'
+                    
+                elif 'pid=' in line and current_info:
+                    match = re.search(r'pid=(\d+)', line)
+                    if match:
+                        current_pid = int(match.group(1))
+                
+                elif 'curProcState=' in line and current_info:
+                    match = re.search(r'curProcState=(\d+)', line)
+                    if match:
+                        proc_state = int(match.group(1))
+                        current_info['proc_state'] = proc_state
+                        current_info['state_label'] = PROC_STATE_MAP.get(proc_state, 'background')
+                
+                elif 'cached=' in line and current_info:
+                    current_info['cached'] = 'cached=true' in line
+            
+            if current_pid and current_info:
+                states[current_pid] = current_info
+            
+            logger.debug(f"Got Android states for {len(states)} processes")
+            return states
+            
+        except Exception as e:
+            logger.warning(f"Failed to get Android process states: {str(e)}")
+            return {}
+    
+    def _apply_android_states(self, processes: List[Dict], android_states: Dict[int, Dict]):
+        # Merges Android state info into process list, with fallback to kernel state
+        for process in processes:
+            pid = process['pid']
+            android_info = android_states.get(pid)
+            
+            if android_info:
+                process['state'] = android_info.get('state_label', 'background')
+                process['android_managed'] = True
+            else:
+                # Fallback for non-Android processes
+                if process.get('is_kernel_thread'):
+                    process['state'] = 'kernel'
+                elif process.get('user') == 'root' and process['pid'] < 1000:
+                    process['state'] = 'native'
+                elif process.get('kernel_state') == 'zombie':
+                    process['state'] = 'zombie'
+                else:
+                    process['state'] = 'native'
+                process['android_managed'] = False
     
     def _parse_process_list(self, ps_output: str) -> List[Dict]:
         processes = []
@@ -130,7 +240,7 @@ class ProcessMonitor:
                 command = parts[8] if len(parts) > 8 else name
                 
                 state_char = state[0] if state else 'S'
-                state_map = {
+                kernel_state_map = {
                     'R': 'running',
                     'S': 'sleeping',
                     'D': 'disk_sleep',
@@ -138,10 +248,12 @@ class ProcessMonitor:
                     'T': 'traced',
                     'W': 'paging'
                 }
-                state_name = state_map.get(state_char, 'unknown')
+                kernel_state = kernel_state_map.get(state_char, 'unknown')
                 
                 memory_mb = round(rss_kb / 1024, 2)
                 cpu_percent = 0.0
+                
+                is_kernel_thread = name.startswith('[') and name.endswith(']')
                 
                 process = {
                     'pid': pid,
@@ -150,10 +262,13 @@ class ProcessMonitor:
                     'cpu_percent': cpu_percent,
                     'memory_kb': rss_kb,
                     'memory_mb': memory_mb,
+                    'memory_delta_mb': 0.0,
                     'vsz_kb': vsz_kb,
-                    'state': state_name,
+                    'state': kernel_state,
+                    'kernel_state': kernel_state,
                     'ppid': ppid,
-                    'command': command
+                    'command': command,
+                    'is_kernel_thread': is_kernel_thread
                 }
                 
                 processes.append(process)

@@ -3,12 +3,17 @@ import { ref, computed } from 'vue'
 export function useProcessFilters(processes) {
   const searchQuery = ref('')
   const filterType = ref('all')
-  const sortBy = ref('pid')
+  const sortBy = ref('memory')
+  const showKernelThreads = ref(false)
   const currentPage = ref(0)
   const pageSize = ref(50)
 
   const filteredProcesses = computed(() => {
     let result = processes.value
+
+    if (!showKernelThreads.value) {
+      result = result.filter(p => !p.is_kernel_thread)
+    }
 
     if (filterType.value === 'user') {
       result = result.filter(p => !p.user.startsWith('system') && p.user !== 'root')
@@ -50,6 +55,7 @@ export function useProcessFilters(processes) {
     searchQuery,
     filterType,
     sortBy,
+    showKernelThreads,
     currentPage,
     pageSize,
     filteredProcesses,

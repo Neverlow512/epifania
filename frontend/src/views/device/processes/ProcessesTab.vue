@@ -9,9 +9,11 @@
               :searchQuery="searchQuery"
               :filterType="filterType"
               :sortBy="sortBy"
+              :showKernelThreads="showKernelThreads"
               @update:searchQuery="searchQuery = $event"
               @update:filterType="filterType = $event"
               @update:sortBy="sortBy = $event"
+              @update:showKernelThreads="showKernelThreads = $event"
             />
 
             <div class="-mx-4 -mb-4">
@@ -137,15 +139,26 @@ export default {
       toggleAutoRefresh,
       processHistory,
       memoryHistory,
-      setRefreshInterval
+      setRefreshInterval,
+      updateMemoryHistory
     } = useProcesses(props.device.serial, {
-      extraFetchers: [fetchSystemMetrics, fetchProcessChurn]
+      extraFetchers: [
+        async () => {
+          await fetchSystemMetrics()
+          const totalMb = memory.value.total_mb || 0
+          const availableMb = memory.value.available_mb || memory.value.free_mb || 0
+          const usedMb = Math.max(0, totalMb - availableMb)
+          updateMemoryHistory(usedMb)
+        },
+        fetchProcessChurn
+      ]
     })
 
     const {
       searchQuery,
       filterType,
       sortBy,
+      showKernelThreads,
       currentPage,
       pageSize,
       filteredProcesses,
@@ -202,6 +215,7 @@ export default {
       searchQuery,
       filterType,
       sortBy,
+      showKernelThreads,
       currentPage,
       pageSize,
       filteredProcesses,
