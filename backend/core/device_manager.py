@@ -1,4 +1,5 @@
 import frida
+import time
 from typing import List, Dict, Optional
 from core.logger import get_logger
 from core.adb_manager import ADBManager
@@ -10,6 +11,8 @@ class DeviceManager:
     def __init__(self):
         self.frida_manager = frida.get_device_manager()
         self.adb_manager = ADBManager()
+        self._device_cache = {}
+        self._cache_ttl = 30
         logger.info("DeviceManager initialized")
     
     def list_devices(self) -> List[Dict[str, str]]:
@@ -42,9 +45,24 @@ class DeviceManager:
             logger.error(f"Failed to enumerate devices: {str(e)}")
             raise RuntimeError(f"Failed to enumerate devices: {str(e)}")
     
-    def get_device_details(self, device_serial: str) -> Optional[Dict[str, any]]:
+    def is_device_connected(self, device_serial: str) -> bool:
+        try:
+            result = self.adb_manager._run_adb_command(['adb', 'devices'], timeout=5)
+            if result.returncode != 0:
+                return False
+            return device_serial in result.stdout and 'device' in result.stdout
+        except Exception:
+            return False
+
+    def get_device_details(self, device_serial: str, use_cache: bool = True) -> Optional[Dict[str, any]]:
         try:
             logger.info(f"Getting details for device {device_serial}")
+            
+            if use_cache:
+                cached = self._device_cache.get(device_serial)
+                if cached and (time.time() - cached['timestamp']) < self._cache_ttl:
+                    logger.debug(f"Using cached device info for {device_serial}")
+                    return cached['data']
             
             adb_devices = self.adb_manager.list_devices()
             device_info = None
@@ -56,6 +74,7 @@ class DeviceManager:
             
             if not device_info:
                 logger.warning(f"Device {device_serial} not found")
+                self._device_cache.pop(device_serial, None)
                 return None
             
             frida_devices = self.frida_manager.enumerate_devices()
@@ -68,11 +87,22 @@ class DeviceManager:
                 device_info["frida_available"] = False
                 device_info["frida_name"] = None
             
+            self._device_cache[device_serial] = {
+                'data': device_info,
+                'timestamp': time.time()
+            }
+            
             logger.info(f"Retrieved details for device {device_serial}")
             return device_info
         except Exception as e:
             logger.error(f"Failed to get device details for {device_serial}: {str(e)}")
             return None
+    
+    def invalidate_cache(self, device_serial: str = None):
+        if device_serial:
+            self._device_cache.pop(device_serial, None)
+        else:
+            self._device_cache.clear()
     
     def verify_device_connection(self, device_serial: str) -> Dict[str, any]:
         try:

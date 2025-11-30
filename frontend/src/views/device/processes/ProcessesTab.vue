@@ -34,9 +34,10 @@
         </div>
       </div>
 
-      <!-- Right: compact stats / overview widget -->
+      <!-- Right: compact stats / overview widget (sticky on scroll) -->
       <div class="lg:col-span-2">
-        <ProcessStatsBar
+        <div class="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
+          <ProcessStatsBar
           :stats="stats"
           :cpu="cpu"
           :memoryMetrics="memory"
@@ -58,6 +59,7 @@
           @update-refresh-interval="setRefreshInterval"
           @load-network-connections="loadNetworkConnections"
         />
+        </div>
       </div>
     </div>
 

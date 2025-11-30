@@ -25,8 +25,7 @@ async def list_processes(device_id: str):
     try:
         logger.info(f"Process list requested for device {device_id}")
         
-        device = device_manager.get_device_details(device_id)
-        if not device:
+        if not device_manager.is_device_connected(device_id):
             raise HTTPException(status_code=404, detail="Device not found")
         
         processes = process_monitor.list_processes(device_id)
@@ -64,8 +63,7 @@ async def get_process_metrics(device_id: str, pid: Optional[int] = None, duratio
     try:
         logger.info(f"Process metrics requested for device {device_id}, pid={pid}, duration={duration}")
         
-        device = device_manager.get_device_details(device_id)
-        if not device:
+        if not device_manager.is_device_connected(device_id):
             raise HTTPException(status_code=404, detail="Device not found")
         
         metrics = process_monitor.get_process_metrics(device_id, pid, duration)
@@ -84,8 +82,7 @@ async def get_process_churn(device_id: str, window: int = 60):
     try:
         logger.info(f"Process churn requested for device {device_id}, window={window}s")
         
-        device = device_manager.get_device_details(device_id)
-        if not device:
+        if not device_manager.is_device_connected(device_id):
             raise HTTPException(status_code=404, detail="Device not found")
         
         churn_stats = process_monitor.get_churn_stats(device_id, window)
@@ -103,8 +100,7 @@ async def get_process_details(device_id: str, pid: int):
     try:
         logger.info(f"Process details requested for PID {pid} on device {device_id}")
         
-        device = device_manager.get_device_details(device_id)
-        if not device:
+        if not device_manager.is_device_connected(device_id):
             raise HTTPException(status_code=404, detail="Device not found")
         
         details = process_monitor.get_process_details(device_id, pid)
@@ -126,8 +122,7 @@ async def kill_process(device_id: str, pid: int, signal: int = 9):
     try:
         logger.info(f"Kill request for PID {pid} on device {device_id}")
         
-        device = device_manager.get_device_details(device_id)
-        if not device:
+        if not device_manager.is_device_connected(device_id):
             raise HTTPException(status_code=404, detail="Device not found")
         
         success = process_monitor.kill_process(device_id, pid, signal)
@@ -155,8 +150,7 @@ async def get_cpu_stats(device_id: str, top_n: int = 5):
     try:
         logger.info(f"CPU stats requested for device {device_id}")
         
-        device = device_manager.get_device_details(device_id)
-        if not device:
+        if not device_manager.is_device_connected(device_id):
             raise HTTPException(status_code=404, detail="Device not found")
         
         stats = cpu_monitor.get_cpu_stats(device_id, top_n)
@@ -174,8 +168,7 @@ async def get_memory_stats(device_id: str, pid: Optional[int] = None):
     try:
         logger.info(f"Memory stats requested for device {device_id}, focused_pid={pid}")
         
-        device = device_manager.get_device_details(device_id)
-        if not device:
+        if not device_manager.is_device_connected(device_id):
             raise HTTPException(status_code=404, detail="Device not found")
         
         stats = memory_monitor.get_memory_stats(device_id, pid)
@@ -193,8 +186,7 @@ async def get_storage_stats(device_id: str, partition: str = "/data"):
     try:
         logger.info(f"Storage stats requested for device {device_id}, partition={partition}")
         
-        device = device_manager.get_device_details(device_id)
-        if not device:
+        if not device_manager.is_device_connected(device_id):
             raise HTTPException(status_code=404, detail="Device not found")
         
         stats = storage_monitor.get_storage_stats(device_id, partition)
@@ -212,8 +204,7 @@ async def get_all_partitions(device_id: str):
     try:
         logger.info(f"All partitions requested for device {device_id}")
         
-        device = device_manager.get_device_details(device_id)
-        if not device:
+        if not device_manager.is_device_connected(device_id):
             raise HTTPException(status_code=404, detail="Device not found")
         
         partitions = storage_monitor.get_all_partitions(device_id)
@@ -231,8 +222,7 @@ async def get_network_stats(device_id: str, pid: Optional[int] = None):
     try:
         logger.info(f"Network stats requested for device {device_id}, focused_pid={pid}")
         
-        device = device_manager.get_device_details(device_id)
-        if not device:
+        if not device_manager.is_device_connected(device_id):
             raise HTTPException(status_code=404, detail="Device not found")
         
         stats = network_monitor.get_network_stats(device_id, pid)
@@ -250,8 +240,7 @@ async def get_all_connections(device_id: str):
     try:
         logger.info(f"All connections requested for device {device_id}")
         
-        device = device_manager.get_device_details(device_id)
-        if not device:
+        if not device_manager.is_device_connected(device_id):
             raise HTTPException(status_code=404, detail="Device not found")
         
         connections = network_monitor.get_all_connections(device_id)
