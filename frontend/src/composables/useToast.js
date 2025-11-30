@@ -4,9 +4,9 @@ const toasts = ref([])
 let nextId = 0
 
 export function useToast() {
-  const findGroup = (type, title, message) => {
+  const findGroup = (type, key, message) => {
     return toasts.value.find(
-      t => t.type === type && t.title === title && t.message === message
+      t => t.type === type && t.key === key && t.message === message
     )
   }
 
@@ -21,9 +21,9 @@ export function useToast() {
     }
   }
 
-  const addToast = (message, type = 'info', title = '', duration = 5000) => {
+  const addToast = (message, type = 'info', key = '', duration = 5000) => {
     if (type === 'error') {
-      const existing = findGroup(type, title, message)
+      const existing = findGroup(type, key, message)
       if (existing) {
         existing.count = 1
         existing.lastUpdated = Date.now()
@@ -35,7 +35,7 @@ export function useToast() {
         id,
         message,
         type,
-        title,
+        key,
         duration,
         count: 1,
         expanded: false,
@@ -52,7 +52,7 @@ export function useToast() {
       id,
       message,
       type,
-      title,
+      key,
       duration,
       pinned: false,
       timeoutId: null
@@ -88,28 +88,28 @@ export function useToast() {
     }
   }
 
-  const clearErrorsByTitle = (title) => {
-    if (!title) return
+  const clearError = (key) => {
+    if (!key) return
     toasts.value = toasts.value.filter(
-      t => !(t.type === 'error' && t.title === title)
+      t => !(t.type === 'error' && t.key === key)
     )
   }
 
-  const success = (message, title = '') => {
-    clearErrorsByTitle(title)
-    return addToast(message, 'success', title)
+  const success = (message, key = '') => {
+    clearError(key)
+    return addToast(message, 'success', key)
   }
 
-  const error = (message, title = '') => {
-    return addToast(message, 'error', title, 7000)
+  const error = (message, key = '') => {
+    return addToast(message, 'error', key, 7000)
   }
 
-  const warning = (message, title = '') => {
-    return addToast(message, 'warning', title, 6000)
+  const warning = (message, key = '') => {
+    return addToast(message, 'warning', key, 6000)
   }
 
-  const info = (message, title = '') => {
-    return addToast(message, 'info', title)
+  const info = (message, key = '') => {
+    return addToast(message, 'info', key)
   }
 
   return {
@@ -118,6 +118,7 @@ export function useToast() {
     removeToast,
     pinToast,
     unpinToast,
+    clearError,
     success,
     error,
     warning,

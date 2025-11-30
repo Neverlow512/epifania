@@ -2,6 +2,8 @@ import { ref } from 'vue'
 import axios from 'axios'
 import { useToast } from '../../../../composables/useToast'
 
+const ERROR_KEY_CHURN = 'process-churn'
+
 export function useProcessChurn(deviceSerial) {
   const toast = useToast()
 
@@ -22,9 +24,10 @@ export function useProcessChurn(deviceSerial) {
         params: { window: churnWindowSeconds.value }
       })
       churn.value = response.data || churn.value
+      toast.clearError(ERROR_KEY_CHURN)
     } catch (err) {
       console.error('Failed to fetch process churn:', err)
-      toast.error('Failed to fetch process churn')
+      toast.error('Failed to fetch process churn', ERROR_KEY_CHURN)
     }
   }
 

@@ -2,6 +2,9 @@ import { ref } from 'vue'
 import axios from 'axios'
 import { useToast } from '../../../../composables/useToast'
 
+const ERROR_KEY_METRICS = 'system-metrics'
+const ERROR_KEY_CONNECTIONS = 'network-connections'
+
 export function useSystemMetrics(deviceSerial) {
   const toast = useToast()
 
@@ -95,7 +98,7 @@ export function useSystemMetrics(deviceSerial) {
         console.error('Failed to fetch network stats:', networkResult.reason)
       }
 
-      const failures = [
+      const hasFailures = [
         cpuResult,
         memoryResult,
         storageResult,
@@ -103,12 +106,14 @@ export function useSystemMetrics(deviceSerial) {
         networkResult
       ].some(result => result.status === 'rejected')
 
-      if (failures) {
-        toast.error('Some system metrics could not be fetched')
+      if (hasFailures) {
+        toast.error('Some system metrics could not be fetched', ERROR_KEY_METRICS)
+      } else {
+        toast.clearError(ERROR_KEY_METRICS)
       }
     } catch (err) {
       console.error('Failed to fetch system metrics:', err)
-      toast.error('Failed to fetch system metrics')
+      toast.error('Failed to fetch system metrics', ERROR_KEY_METRICS)
     }
   }
 
@@ -118,9 +123,10 @@ export function useSystemMetrics(deviceSerial) {
       const response = await axios.get(`${baseUrl}/system/network/connections`)
       networkConnections.value = response.data.connections || []
       networkConnectionsCount.value = response.data.count ?? networkConnections.value.length
+      toast.clearError(ERROR_KEY_CONNECTIONS)
     } catch (err) {
       console.error('Failed to fetch network connections:', err)
-      toast.error('Failed to fetch network connections')
+      toast.error('Failed to fetch network connections', ERROR_KEY_CONNECTIONS)
     }
   }
 

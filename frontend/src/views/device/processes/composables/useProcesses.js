@@ -2,6 +2,8 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { useToast } from '../../../../composables/useToast'
 
+const ERROR_KEY_PROCESSES = 'processes-fetch'
+
 export function useProcesses(deviceSerial, options = {}) {
   const { extraFetchers = [] } = options
   const toast = useToast()
@@ -39,9 +41,11 @@ export function useProcesses(deviceSerial, options = {}) {
       if (processHistory.value.length > maxHistoryPoints) {
         processHistory.value.splice(0, processHistory.value.length - maxHistoryPoints)
       }
+
+      toast.clearError(ERROR_KEY_PROCESSES)
     } catch (err) {
       console.error('Failed to fetch processes:', err)
-      toast.error('Failed to fetch processes')
+      toast.error('Failed to fetch processes', ERROR_KEY_PROCESSES)
     } finally {
       loading.value = false
     }

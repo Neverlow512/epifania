@@ -50,7 +50,13 @@ class DeviceManager:
             result = self.adb_manager._run_adb_command(['adb', 'devices'], timeout=5)
             if result.returncode != 0:
                 return False
-            return device_serial in result.stdout and 'device' in result.stdout
+            for line in result.stdout.strip().split('\n'):
+                if line.startswith('List of devices') or not line.strip():
+                    continue
+                parts = line.split()
+                if len(parts) >= 2 and parts[0] == device_serial and parts[1] == 'device':
+                    return True
+            return False
         except Exception:
             return False
 

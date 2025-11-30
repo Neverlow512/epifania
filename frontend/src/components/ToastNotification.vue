@@ -22,7 +22,6 @@
           </div>
 
           <div class="toast-message">
-            <div v-if="toast.title" class="toast-title">{{ toast.title }}</div>
             <div class="toast-text">{{ toast.message }}</div>
           </div>
 
@@ -100,9 +99,6 @@
           >
             <div class="toast-panel-content">
               <div class="toast-panel-text">
-                <div v-if="toast.title" class="toast-title">
-                  {{ toast.title }}
-                </div>
                 <div class="toast-text">
                   {{ toast.message }}
                 </div>
