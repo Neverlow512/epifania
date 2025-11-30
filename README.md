@@ -48,6 +48,11 @@ A GUI-based Dynamic Instrumentation Platform wrapping Frida and ADB for security
 - ✅ Process churn tracking (spawned/killed processes over time)
 - ✅ Network connection monitoring with per-process TCP connections
 - ✅ Storage partition monitoring with usage statistics
+- ✅ Android process state detection via ActivityManager (foreground, cached, persistent, etc.)
+- ✅ Process State Dictionary with detailed state explanations
+- ✅ Kernel thread filtering with show/hide toggle
+- ✅ Memory delta tracking with visual change indicators
+- ✅ Educational help modals for CPU, Memory, and Process List interpretation
 - ✅ Modular frontend architecture with feature-based directory structure
 - ✅ Unified launcher script for cross-platform deployment
 
@@ -593,10 +598,14 @@ Retrieves all running processes on the device with memory usage, state, and user
       "cpu_percent": 0.0,
       "memory_kb": 45678,
       "memory_mb": 44.61,
+      "memory_delta_mb": 0.5,
       "vsz_kb": 1234567,
-      "state": "sleeping",
+      "state": "cached",
+      "kernel_state": "sleeping",
       "ppid": 567,
-      "command": "com.example.app"
+      "command": "com.example.app",
+      "is_kernel_thread": false,
+      "android_managed": true
     }
   ],
   "count": 245,
@@ -613,6 +622,10 @@ Retrieves all running processes on the device with memory usage, state, and user
   }
 }
 ```
+
+**Process State Values:**
+- Android-managed processes: `foreground`, `visible`, `service`, `bound`, `background`, `cached`, `persistent`, `receiver`
+- System processes: `kernel` (kernel threads), `native` (system daemons), `zombie` (terminated but not cleaned up)
 
 #### Get Process Details
 
@@ -1078,7 +1091,8 @@ The device details interface is organized into tabbed sections for clear separat
 - Process churn tracking showing spawned and killed processes over configurable time windows
 - Search functionality across PID, name, user, and command
 - Filter by process type (all, user, system)
-- Sort by PID, name, memory usage, or user
+- Kernel thread filtering with show/hide toggle (hidden by default)
+- Sort by PID, name, memory usage, or user (defaults to memory for identifying resource-heavy processes)
 - Paginated process table with 50 processes per page
 - Process inspection with detailed information:
   - Command line arguments
@@ -1089,7 +1103,13 @@ The device details interface is organized into tabbed sections for clear separat
   - Per-process memory breakdown (RSS, VSZ, peak memory)
   - Per-process TCP connections with local/remote addresses and states
 - Process termination with confirmation dialog
-- Process state indicators (running, sleeping, zombie, traced, disk_sleep)
+- Android process state indicators via ActivityManager:
+  - foreground (app on screen), visible (bound to foreground), service (foreground service)
+  - cached (can be killed), persistent (system-critical), background, bound, receiver
+  - Fallback states for non-Android processes: kernel, native, zombie
+- State Dictionary modal with detailed explanations accessible from table header
+- Memory delta tracking with visual indicators showing changes between refreshes
+- Educational help modals explaining CPU metrics, memory metrics, and process list interpretation
 - Change detection for spawned, killed, and resource-intensive processes
 
 **Placeholder Tabs (In Development):**
@@ -1131,12 +1151,18 @@ The device details interface is organized into tabbed sections for clear separat
 - **Real-time Process List**: Enumerate all running processes via ADB with automatic refresh
 - **Process Statistics**: Display total, user, and system process counts with aggregate memory usage
 - **System Resource Monitoring**: Comprehensive device telemetry including:
-  - **CPU Monitoring**: Overall CPU usage percentage with top N CPU-consuming processes
+  - **CPU Monitoring**: Overall CPU usage percentage with top N CPU-consuming processes (uses `top` with `ps` fallback)
   - **Memory Monitoring**: System RAM metrics (total, used, free, available, buffers, cached) with per-process memory details
   - **Storage Monitoring**: Partition usage statistics (total, used, free, percent used) for all mounted partitions
   - **Network Monitoring**: Real-time throughput tracking (bytes sent/received per second), recent network endpoints, and per-process TCP connections
+- **Android Process State Classification**: Accurate process states via `dumpsys activity processes`:
+  - Maps Android's `curProcState` values (0-20) to user-friendly labels
+  - States include: foreground, visible, service, bound, background, cached, persistent, receiver
+  - Fallback classification for non-Android processes: kernel threads, native daemons, zombies
+  - Kernel thread detection for processes running in kernel space (names in [brackets])
 - **Process Churn Tracking**: Monitor process spawn/kill events with configurable time windows and historical event lists
 - **Search and Filter**: Find processes by PID, name, user, or command with type filtering (all/user/system)
+- **Kernel Thread Filtering**: Toggle to show/hide kernel threads (hidden by default for cleaner view)
 - **Sorting Options**: Sort by PID, name, memory usage, or user
 - **Pagination**: Navigate large process lists with configurable page size
 - **Process Inspection**: View detailed process information including:
@@ -1148,9 +1174,11 @@ The device details interface is organized into tabbed sections for clear separat
   - Detailed per-process memory breakdown (RSS, VSZ, peak, high-water mark)
   - Active TCP connections with local/remote addresses and connection states
 - **Process Termination**: Kill processes with confirmation dialog (attempts root access if available)
-- **State Indicators**: Visual badges for process states (running, sleeping, zombie, traced, disk_sleep)
+- **State Dictionary**: Interactive help modal explaining all process states with interpretation guidance
+- **Memory Delta Tracking**: Visual indicators showing memory changes between refreshes (+red for increase, -green for decrease)
+- **Educational Help Modals**: Detailed explanations for CPU metrics, memory metrics (RSS vs system memory), and process list interpretation
 - **Change Detection**: Track spawned, killed, and resource-intensive processes between refreshes
-- **Metrics Storage**: Historical CPU and memory data with configurable retention (120 data points per process)
+- **Metrics Storage**: Historical process count and system memory data with configurable retention (120 data points); memory history uses actual system RAM (Total - Available) instead of summed RSS
 - **Auto-Refresh**: Configurable refresh interval (default 2 seconds) with toggle control
 
 ### Health Monitoring & Diagnostics
@@ -1281,15 +1309,15 @@ epifania/
 │   │   │       ├── processes/    # Process monitoring tab
 │   │   │       │   ├── ProcessesTab.vue
 │   │   │       │   ├── components/
-│   │   │       │   │   ├── ProcessControlBar.vue
+│   │   │       │   │   ├── ProcessControlBar.vue    # Search, filters, kernel toggle, Details modal
 │   │   │       │   │   ├── ProcessDetailsModal.vue
 │   │   │       │   │   ├── ProcessKillModal.vue
-│   │   │       │   │   ├── ProcessStatsBar.vue
-│   │   │       │   │   └── ProcessTable.vue
+│   │   │       │   │   ├── ProcessStatsBar.vue      # Runtime overview with CPU/Memory help modals
+│   │   │       │   │   └── ProcessTable.vue         # Process list with State Dictionary modal
 │   │   │       │   └── composables/
 │   │   │       │       ├── useProcessActions.js
 │   │   │       │       ├── useProcesses.js
-│   │   │       │       ├── useProcessFilters.js
+│   │   │       │       ├── useProcessFilters.js     # Includes kernel thread filtering
 │   │   │       │       ├── useProcessChurn.js
 │   │   │       │       └── useSystemMetrics.js
 │   │   │       ├── packages/     # Package management (placeholder)
@@ -1352,8 +1380,8 @@ The backend follows a modular architecture with clear separation of concerns:
 - `backend/core/diagnostics.py`: Comprehensive ADB diagnostics with multiple test suites
 - `backend/device/`: Feature modules for device-specific functionality
   - `backend/device/processes_tab/routes.py`: Process management API endpoints (list, details, kill, metrics, churn, system monitoring)
-  - `backend/device/processes_tab/monitoring/dprocess_monitor.py`: Process monitoring class with ADB-based process enumeration, metrics collection, change detection, and churn tracking
-  - `backend/device/processes_tab/monitoring/cpu_monitor.py`: CPU usage monitoring with overall percentage and top consumer tracking
+  - `backend/device/processes_tab/monitoring/dprocess_monitor.py`: Process monitoring class with ADB-based process enumeration, Android state classification via dumpsys, kernel thread detection, memory delta tracking, and churn tracking
+  - `backend/device/processes_tab/monitoring/cpu_monitor.py`: CPU usage monitoring with `top` command parsing (with `ps` fallback) and top consumer tracking
   - `backend/device/processes_tab/monitoring/memory_monitor.py`: System and per-process memory monitoring
   - `backend/device/processes_tab/monitoring/storage_monitor.py`: Storage partition monitoring and usage statistics
   - `backend/device/processes_tab/monitoring/network_monitor.py`: Network throughput, connection tracking, and per-process TCP monitoring
@@ -1416,11 +1444,18 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 **Composables:**
 - `frontend/src/composables/useApiConnection.js`: Backend connection management with auto-reconnect
 - `frontend/src/composables/useToast.js`: Toast notification state management
-- `frontend/src/views/device/processes/composables/useProcesses.js`: Process fetching with auto-refresh
-- `frontend/src/views/device/processes/composables/useProcessFilters.js`: Search, filter, sort, and pagination logic
+- `frontend/src/views/device/processes/composables/useProcesses.js`: Process fetching with auto-refresh and memory history tracking
+- `frontend/src/views/device/processes/composables/useProcessFilters.js`: Search, filter, sort, pagination, and kernel thread filtering logic
 - `frontend/src/views/device/processes/composables/useProcessActions.js`: Process inspection and termination actions
 - `frontend/src/views/device/processes/composables/useProcessChurn.js`: Process spawn/kill event tracking
 - `frontend/src/views/device/processes/composables/useSystemMetrics.js`: System resource monitoring (CPU, memory, storage, network)
+
+**Process Tab Components:**
+- `ProcessControlBar.vue`: Search, filter, sort controls with kernel thread toggle and Details help modal
+- `ProcessStatsBar.vue`: Runtime overview with CPU/Memory/Storage/Network widgets and educational help modals
+- `ProcessTable.vue`: Process list with State Dictionary modal and memory delta indicators
+- `ProcessDetailsModal.vue`: Detailed process inspection view
+- `ProcessKillModal.vue`: Process termination confirmation dialog
 
 **Technical Implementation:**
 - Vue 3 Composition API for reactive state management
@@ -1435,11 +1470,12 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - Manual logcat activation to prevent performance impact from verbose system logs
 - Optimized polling intervals: 15s for device details, 30s for Frida connection tests, 2s for process list
 - Direct GitHub API integration: Fetches latest 10 Frida releases client-side
-- Modal-based detail views: Comprehensive information accessible via modals
+- Modal-based detail views: Comprehensive information accessible via modals including State Dictionary, CPU explanation, and Memory explanation
 - Reusable tab navigation component with keyboard accessibility
 - Composable-based state management with separation of data fetching, filtering, and actions
 - System metrics integration with real-time CPU, memory, storage, and network monitoring
 - Process churn visualization with spawn/kill event tracking
+- Android process state integration via ActivityManager for accurate state classification
 
 ### Dependency Management
 
