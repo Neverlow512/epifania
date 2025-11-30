@@ -63,7 +63,14 @@
               </svg>
             </div>
             <span class="text-xs text-slate-400 font-medium">CPU</span>
-            <span class="ml-auto text-[10px] px-1.5 py-0.5 rounded" :class="cpuBadgeClass">{{ cpuLoadLabel }}</span>
+            <button
+              type="button"
+              class="ml-auto text-[9px] text-slate-500 hover:text-blue-400 transition-colors border border-slate-700 hover:border-blue-500/50 rounded px-1.5 py-0.5"
+              @click="showCpuDetails = true"
+            >
+              Details
+            </button>
+            <span class="text-[10px] px-1.5 py-0.5 rounded" :class="cpuBadgeClass">{{ cpuLoadLabel }}</span>
           </div>
           <div class="flex items-baseline gap-2 mb-2">
             <span class="text-2xl font-semibold text-white font-mono">{{ (cpu.overall_percent || 0).toFixed(1) }}</span>
@@ -302,9 +309,18 @@
         <div v-else-if="activeTab === 'CPU'" class="space-y-2 text-xs">
           <div class="flex items-center justify-between text-slate-400">
             <span>Top CPU consumers</span>
-            <span class="text-slate-500">
-              Overall: {{ (cpu.overall_percent || 0).toFixed(1) }}%
-            </span>
+            <div class="flex items-center gap-3">
+              <span class="text-slate-500">
+                Overall: {{ (cpu.overall_percent || 0).toFixed(1) }}%
+              </span>
+              <button
+                type="button"
+                class="text-[10px] text-slate-500 hover:text-blue-400 transition-colors border border-slate-700 hover:border-blue-500/50 rounded px-1.5 py-0.5"
+                @click="showCpuDetails = true"
+              >
+                Details
+              </button>
+            </div>
           </div>
           <div class="max-h-40 overflow-y-auto border border-neutral-800 rounded">
             <table class="table table-xs">
@@ -488,6 +504,159 @@
         </div>
       </div>
     </div>
+
+    <!-- CPU Details Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showCpuDetails"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      >
+        <div
+          class="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          @click="showCpuDetails = false"
+        ></div>
+        <div class="relative bg-neutral-900 border border-primary/30 rounded-xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-neutral-800">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                <svg class="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-lg font-semibold text-white">Understanding CPU Metrics</h3>
+                <p class="text-xs text-slate-500">How CPU usage is measured on Android devices</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm btn-circle"
+              @click="showCpuDetails = false"
+            >
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="p-4 overflow-y-auto max-h-[calc(85vh-80px)] space-y-6 text-sm">
+            <section class="space-y-2">
+              <h4 class="text-base font-medium text-white flex items-center gap-2">
+                <span class="w-6 h-6 rounded bg-blue-500/20 flex items-center justify-center text-xs text-blue-400">1</span>
+                Why do most processes show 0% CPU?
+              </h4>
+              <p class="text-slate-400 leading-relaxed">
+                CPU measurements are taken as <span class="text-white">instant snapshots</span>. At any given microsecond, most processes are sleeping (waiting for I/O, timers, or user input) rather than actively executing code.
+              </p>
+              <p class="text-slate-400 leading-relaxed">
+                A process showing 0% means it wasn't running on any CPU core at that exact moment. Even busy processes spend most of their time sleeping between handling events.
+              </p>
+            </section>
+
+            <section class="space-y-2">
+              <h4 class="text-base font-medium text-white flex items-center gap-2">
+                <span class="w-6 h-6 rounded bg-emerald-500/20 flex items-center justify-center text-xs text-emerald-400">2</span>
+                How can a process use 100% but overall be ~30%?
+              </h4>
+              <p class="text-slate-400 leading-relaxed">
+                This is due to <span class="text-white">multi-core CPUs</span>. Your device has multiple CPU cores, and percentages are calculated differently:
+              </p>
+              <div class="bg-black/40 rounded-lg p-3 border border-neutral-800 space-y-2">
+                <div class="flex items-start gap-2">
+                  <span class="text-blue-400 font-mono text-xs mt-0.5">Per-process:</span>
+                  <span class="text-slate-300 text-xs">Relative to one core (0-100% per core)</span>
+                </div>
+                <div class="flex items-start gap-2">
+                  <span class="text-emerald-400 font-mono text-xs mt-0.5">Overall:</span>
+                  <span class="text-slate-300 text-xs">Relative to all cores combined</span>
+                </div>
+              </div>
+              <p class="text-slate-400 leading-relaxed">
+                On a 4-core system, one process at 100% uses 1 full core, which equals <span class="text-white">25% of total CPU capacity</span>. The overall ~30% you see is that process (25%) plus other system overhead (~5%).
+              </p>
+            </section>
+
+            <section class="space-y-2">
+              <h4 class="text-base font-medium text-white flex items-center gap-2">
+                <span class="w-6 h-6 rounded bg-amber-500/20 flex items-center justify-center text-xs text-amber-400">3</span>
+                Visual Example
+              </h4>
+              <div class="bg-black/40 rounded-lg p-4 border border-neutral-800 font-mono text-xs">
+                <div class="text-slate-500 mb-2">4-Core CPU Total Capacity: 400%</div>
+                <div class="grid grid-cols-4 gap-1 mb-3">
+                  <div class="bg-red-500/30 border border-red-500/50 rounded p-2 text-center">
+                    <div class="text-red-400">Core 0</div>
+                    <div class="text-white text-sm">100%</div>
+                    <div class="text-red-300 text-[10px]">(busy)</div>
+                  </div>
+                  <div class="bg-neutral-800 border border-neutral-700 rounded p-2 text-center">
+                    <div class="text-slate-500">Core 1</div>
+                    <div class="text-slate-400 text-sm">0%</div>
+                    <div class="text-slate-600 text-[10px]">(idle)</div>
+                  </div>
+                  <div class="bg-neutral-800 border border-neutral-700 rounded p-2 text-center">
+                    <div class="text-slate-500">Core 2</div>
+                    <div class="text-slate-400 text-sm">0%</div>
+                    <div class="text-slate-600 text-[10px]">(idle)</div>
+                  </div>
+                  <div class="bg-neutral-800 border border-neutral-700 rounded p-2 text-center">
+                    <div class="text-slate-500">Core 3</div>
+                    <div class="text-slate-400 text-sm">0%</div>
+                    <div class="text-slate-600 text-[10px]">(idle)</div>
+                  </div>
+                </div>
+                <div class="space-y-1 text-slate-400">
+                  <div>Process "sh": <span class="text-white">100%</span> (of 1 core)</div>
+                  <div>Overall CPU: 100/400 = <span class="text-emerald-400">25%</span> (+ overhead = ~30%)</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="space-y-2">
+              <h4 class="text-base font-medium text-white flex items-center gap-2">
+                <span class="w-6 h-6 rounded bg-violet-500/20 flex items-center justify-center text-xs text-violet-400">4</span>
+                Process States
+              </h4>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="bg-black/40 rounded p-2 border border-neutral-800">
+                  <span class="text-emerald-400 font-medium">Running (R)</span>
+                  <p class="text-slate-500 text-xs mt-1">Actively executing on a CPU core</p>
+                </div>
+                <div class="bg-black/40 rounded p-2 border border-neutral-800">
+                  <span class="text-blue-400 font-medium">Sleeping (S)</span>
+                  <p class="text-slate-500 text-xs mt-1">Waiting for an event (most common)</p>
+                </div>
+                <div class="bg-black/40 rounded p-2 border border-neutral-800">
+                  <span class="text-amber-400 font-medium">Disk Sleep (D)</span>
+                  <p class="text-slate-500 text-xs mt-1">Waiting for I/O operation</p>
+                </div>
+                <div class="bg-black/40 rounded p-2 border border-neutral-800">
+                  <span class="text-red-400 font-medium">Zombie (Z)</span>
+                  <p class="text-slate-500 text-xs mt-1">Terminated but not yet cleaned up</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="space-y-2">
+              <h4 class="text-base font-medium text-white flex items-center gap-2">
+                <span class="w-6 h-6 rounded bg-sky-500/20 flex items-center justify-center text-xs text-sky-400">5</span>
+                Data Sources
+              </h4>
+              <div class="bg-black/40 rounded-lg p-3 border border-neutral-800 space-y-2 text-xs">
+                <div class="flex items-start gap-2">
+                  <span class="text-slate-500 w-24 flex-shrink-0">Overall CPU:</span>
+                  <span class="text-slate-400">Calculated from <code class="text-blue-400 bg-blue-500/10 px-1 rounded">/proc/stat</code> delta between samples</span>
+                </div>
+                <div class="flex items-start gap-2">
+                  <span class="text-slate-500 w-24 flex-shrink-0">Per-process:</span>
+                  <span class="text-slate-400">Instant snapshot from <code class="text-blue-400 bg-blue-500/10 px-1 rounded">top</code> command</span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -564,7 +733,8 @@ export default {
   data() {
     return {
       activeTab: 'Overview',
-      tabs: ['Overview', 'CPU', 'Network', 'Activity']
+      tabs: ['Overview', 'CPU', 'Network', 'Activity'],
+      showCpuDetails: false
     }
   },
   computed: {

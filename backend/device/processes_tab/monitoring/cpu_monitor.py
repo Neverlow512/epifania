@@ -1,6 +1,6 @@
 # CPU monitoring for Android devices via ADB
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 from collections import defaultdict
 import time
 from core.logger import get_logger
@@ -61,7 +61,6 @@ class CPUMonitor:
             
             current_time = time.time()
             prev = self._previous_stats.get(device_serial, {})
-            prev_time = self._previous_timestamps.get(device_serial, 0)
             
             self._previous_stats[device_serial] = {
                 "total": total,
@@ -86,14 +85,26 @@ class CPUMonitor:
             return 0.0
     
     def _get_top_consumers(self, device_serial: str, top_n: int = 5) -> List[Dict]:
+        # Primary: use top command for real-time CPU data
+        consumers = self._parse_top_output(device_serial, top_n)
+        if consumers:
+            return consumers
+        
+        # Fallback: use ps command (widely supported, slightly smoothed values)
+        return self._fallback_ps_consumers(device_serial, top_n)
+    
+    def _parse_top_output(self, device_serial: str, top_n: int = 5) -> List[Dict]:
         try:
+            # Use top without -o flag to get full process info
+            # -m limits output to top N+10 processes (buffer for parsing)
             result = self.adb_manager.execute_shell(
                 device_serial,
-                "top -n 1 -b -o %CPU 2>/dev/null | head -20"
+                f"top -n 1 -b -m {top_n + 10} 2>/dev/null"
             )
             
             if not result:
-                return self._fallback_top_consumers(device_serial, top_n)
+                logger.debug("top command returned no output")
+                return []
             
             consumers = []
             lines = result.strip().split('\n')
@@ -104,8 +115,8 @@ class CPUMonitor:
                 if not line:
                     continue
                 
-                # Detect header line (PID is typically first column)
-                if "PID" in line and ("CPU" in line or "%CPU" in line):
+                # Detect header line containing PID
+                if "PID" in line:
                     in_process_section = True
                     continue
                 
@@ -113,71 +124,93 @@ class CPUMonitor:
                     continue
                 
                 parts = line.split()
-                if len(parts) < 9:
+                # Format: PID USER PR NI VIRT RES SHR S CPU% %MEM TIME+ ARGS...
+                # Minimum 12 parts for a valid line with ARGS
+                if len(parts) < 12:
                     continue
                 
                 try:
                     pid = int(parts[0])
-                    # CPU% position varies by Android version, usually index 8 or 9
-                    cpu_str = None
-                    for i, p in enumerate(parts):
-                        if '%' in p or (p.replace('.', '').isdigit() and i > 4):
-                            cpu_str = p.replace('%', '')
-                            break
                     
-                    if cpu_str is None:
-                        cpu_str = parts[8] if len(parts) > 8 else "0"
+                    # Column 8 is CPU% (after PID USER PR NI VIRT RES SHR S)
+                    cpu_percent = float(parts[8])
                     
-                    cpu_percent = float(cpu_str.replace('%', ''))
-                    name = parts[-1]
+                    # ARGS starts at column 11 - take first word as process name
+                    args = ' '.join(parts[11:])
+                    name = self._extract_process_name(args)
                     
-                    if cpu_percent > 0:
-                        consumers.append({
-                            "pid": pid,
-                            "name": name,
-                            "cpu_percent": round(cpu_percent, 1)
-                        })
+                    consumers.append({
+                        "pid": pid,
+                        "name": name,
+                        "cpu_percent": round(cpu_percent, 1)
+                    })
                 except (ValueError, IndexError):
                     continue
             
+            # Sort by CPU and return top N
             consumers.sort(key=lambda x: x["cpu_percent"], reverse=True)
             return consumers[:top_n]
             
         except Exception as e:
-            logger.error(f"Failed to get top CPU consumers for {device_serial}: {str(e)}")
+            logger.debug(f"top parsing failed for {device_serial}: {str(e)}")
             return []
     
-    def _fallback_top_consumers(self, device_serial: str, top_n: int = 5) -> List[Dict]:
-        # Fallback using ps if top is not available
+    def _extract_process_name(self, args: str) -> str:
+        if not args:
+            return "unknown"
+        
+        # Handle kernel threads like [kworker/u8:1]
+        if args.startswith('[') and ']' in args:
+            return args.split(']')[0] + ']'
+        
+        # Get first token (the executable)
+        first_token = args.split()[0] if args.split() else args
+        
+        # Remove path prefix
+        if '/' in first_token:
+            first_token = first_token.split('/')[-1]
+        
+        return first_token
+    
+    def _fallback_ps_consumers(self, device_serial: str, top_n: int = 5) -> List[Dict]:
+        # Fallback using ps - provides slightly smoothed CPU values but widely supported
         try:
             result = self.adb_manager.execute_shell(
                 device_serial,
-                "ps -A -o PID,NAME,%CPU 2>/dev/null | sort -k3 -rn | head -10"
+                f"ps -A -o PID,NAME,%CPU 2>/dev/null | sort -k3 -rn | head -{top_n + 5}"
             )
             
             if not result:
+                logger.debug("ps fallback returned no output")
                 return []
             
             consumers = []
-            for line in result.strip().split('\n')[1:]:
+            for line in result.strip().split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+                
                 parts = line.split()
-                if len(parts) >= 3:
-                    try:
-                        pid = int(parts[0])
-                        name = parts[1]
-                        cpu_percent = float(parts[2].replace('%', ''))
-                        if cpu_percent > 0:
-                            consumers.append({
-                                "pid": pid,
-                                "name": name,
-                                "cpu_percent": round(cpu_percent, 1)
-                            })
-                    except (ValueError, IndexError):
-                        continue
+                if len(parts) < 3:
+                    continue
+                
+                try:
+                    pid = int(parts[0])
+                    name = parts[1]
+                    cpu_str = parts[2].replace('%', '')
+                    cpu_percent = float(cpu_str)
+                    
+                    consumers.append({
+                        "pid": pid,
+                        "name": name,
+                        "cpu_percent": round(cpu_percent, 1)
+                    })
+                except (ValueError, IndexError):
+                    continue
             
             return consumers[:top_n]
             
         except Exception as e:
-            logger.debug(f"Fallback CPU consumers failed: {str(e)}")
+            logger.debug(f"ps fallback failed for {device_serial}: {str(e)}")
             return []
 
