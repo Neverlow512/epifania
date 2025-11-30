@@ -89,18 +89,18 @@
               </svg>
             </div>
             <span class="text-xs text-slate-400 font-medium">Memory</span>
-            <span class="ml-auto text-[10px] text-slate-500">{{ memoryFillPercent }}%</span>
+            <span class="ml-auto text-[10px] text-slate-500">{{ memoryUsedPercent }}%</span>
           </div>
           <div class="flex items-baseline gap-1 mb-1">
-            <span class="text-lg font-semibold text-white font-mono">{{ formatMemoryCompact(memory.used_mb) }}</span>
+            <span class="text-lg font-semibold text-white font-mono">{{ formatMemoryCompact(memoryActualUsed) }}</span>
             <span class="text-xs text-slate-600">/</span>
             <span class="text-sm text-slate-400 font-mono">{{ formatMemoryCompact(memory.total_mb) }}</span>
           </div>
           <div class="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden mb-2">
-            <div class="h-full bg-emerald-500 rounded-full" :style="{ width: memoryFillPercent + '%' }"></div>
+            <div class="h-full bg-emerald-500 rounded-full" :style="{ width: memoryUsedPercent + '%' }"></div>
           </div>
           <div class="text-[11px] text-slate-500 mt-auto">
-            <span class="text-emerald-400">{{ formatMemoryCompact(memory.free_mb) }}</span> free
+            <span class="text-emerald-400">{{ formatMemoryCompact(memory.available_mb || memory.free_mb) }}</span> available
           </div>
         </div>
 
@@ -620,6 +620,20 @@ export default {
       if (percent < 0) return 0
       if (percent > 100) return 100
       return percent.toFixed(1)
+    },
+    memoryActualUsed() {
+      const total = this.memory.total_mb || 0
+      const available = this.memory.available_mb || this.memory.free_mb || 0
+      return Math.max(0, total - available)
+    },
+    memoryUsedPercent() {
+      const total = this.memory.total_mb || 0
+      if (!total || total <= 0) return 0
+      const used = this.memoryActualUsed
+      const percent = (used / total) * 100
+      if (percent < 0) return 0
+      if (percent > 100) return 100
+      return percent.toFixed(1)
     }
   },
   methods: {
@@ -647,8 +661,11 @@ export default {
     },
     formatMemoryCompact(mb) {
       if (!mb) return '0'
-      if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
-      return `${mb.toFixed(0)} MB`
+      if (mb >= 1024) {
+        const gb = mb / 1024
+        return `${gb.toFixed(2)} GB`
+      }
+      return `${Math.round(mb)} MB`
     },
     formatGb(gb) {
       if (!gb) return '0 GB'
