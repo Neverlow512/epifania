@@ -36,6 +36,7 @@ PROC_STATE_MAP = {
 
 class ChurnTracker:
     # Tracks process spawn/kill events with timestamps for time-windowed counts
+    # Maintains full history for research purposes (up to max_events per device)
     
     def __init__(self, max_events: int = 1000):
         self._spawn_events: Dict[str, deque] = defaultdict(lambda: deque(maxlen=max_events))
@@ -46,7 +47,8 @@ class ChurnTracker:
         self._spawn_events[device_serial].append({
             "timestamp": timestamp,
             "pid": process.get("pid"),
-            "name": process.get("name", "unknown")
+            "name": process.get("name", "unknown"),
+            "user": process.get("user", "unknown")
         })
     
     def record_kill(self, device_serial: str, process: Dict):
@@ -54,7 +56,8 @@ class ChurnTracker:
         self._kill_events[device_serial].append({
             "timestamp": timestamp,
             "pid": process.get("pid"),
-            "name": process.get("name", "unknown")
+            "name": process.get("name", "unknown"),
+            "user": process.get("user", "unknown")
         })
     
     def get_churn_stats(self, device_serial: str, window_seconds: int = 60) -> Dict:
@@ -69,6 +72,7 @@ class ChurnTracker:
                 spawned_recent.append({
                     "pid": event["pid"],
                     "name": event["name"],
+                    "user": event.get("user", "unknown"),
                     "seconds_ago": int(current_time - event["timestamp"])
                 })
         
@@ -80,6 +84,7 @@ class ChurnTracker:
                 killed_recent.append({
                     "pid": event["pid"],
                     "name": event["name"],
+                    "user": event.get("user", "unknown"),
                     "seconds_ago": int(current_time - event["timestamp"])
                 })
         
@@ -95,6 +100,48 @@ class ChurnTracker:
             "recent_spawned": spawned_recent[:10],
             "recent_killed": killed_recent[:10]
         }
+    
+    def get_full_history(self, device_serial: str, limit: int = 500) -> Dict:
+        # Returns full chronological history of all spawn/kill events for research
+        current_time = time.time()
+        
+        all_events = []
+        
+        for event in self._spawn_events[device_serial]:
+            all_events.append({
+                "type": "spawn",
+                "timestamp": event["timestamp"],
+                "time_iso": datetime.fromtimestamp(event["timestamp"]).isoformat(),
+                "pid": event["pid"],
+                "name": event["name"],
+                "user": event.get("user", "unknown"),
+                "seconds_ago": int(current_time - event["timestamp"])
+            })
+        
+        for event in self._kill_events[device_serial]:
+            all_events.append({
+                "type": "kill",
+                "timestamp": event["timestamp"],
+                "time_iso": datetime.fromtimestamp(event["timestamp"]).isoformat(),
+                "pid": event["pid"],
+                "name": event["name"],
+                "user": event.get("user", "unknown"),
+                "seconds_ago": int(current_time - event["timestamp"])
+            })
+        
+        # Sort by timestamp descending (most recent first)
+        all_events.sort(key=lambda x: x["timestamp"], reverse=True)
+        
+        total_spawned = len(self._spawn_events[device_serial])
+        total_killed = len(self._kill_events[device_serial])
+        
+        return {
+            "events": all_events[:limit],
+            "total_events": len(all_events),
+            "total_spawned": total_spawned,
+            "total_killed": total_killed,
+            "limited": len(all_events) > limit
+        }
 
 
 class ProcessMonitor:
@@ -102,7 +149,9 @@ class ProcessMonitor:
         self.adb_manager = adb_manager
         self.metrics_storage = defaultdict(lambda: defaultdict(lambda: deque(maxlen=120)))
         self.previous_snapshots = defaultdict(dict)
+        self.snapshot_timestamps = defaultdict(float)
         self.churn_tracker = ChurnTracker()
+        self._initialized_devices = set()
         logger.info("ProcessMonitor initialized")
     
     def list_processes(self, device_serial: str) -> List[Dict]:
@@ -453,11 +502,23 @@ class ProcessMonitor:
                 self.metrics_storage[device_serial][pid].append(metric_point)
     
     def detect_changes(self, device_serial: str, current_processes: List[Dict]) -> Dict:
+        current_time = time.time()
         previous = self.previous_snapshots.get(device_serial, {})
         current = {p['pid']: p for p in current_processes}
+        last_snapshot_time = self.snapshot_timestamps.get(device_serial, 0)
         
-        # Update snapshot immediately to guarantee it's always updated per request
+        # Debounce: skip churn recording if snapshot was updated less than 500ms ago
+        # This prevents double-counting when multiple tabs poll simultaneously
+        should_record_churn = (current_time - last_snapshot_time) >= 0.5
+        
+        # Check if this is the first snapshot for this device (initialization)
+        is_first_snapshot = device_serial not in self._initialized_devices
+        if is_first_snapshot:
+            self._initialized_devices.add(device_serial)
+        
+        # Update snapshot and timestamp
         self.previous_snapshots[device_serial] = current
+        self.snapshot_timestamps[device_serial] = current_time
         
         previous_pids = set(previous.keys())
         current_pids = set(current.keys())
@@ -482,8 +543,11 @@ class ProcessMonitor:
         for pid in current_pids - previous_pids:
             spawned.append(current[pid])
         
-        # Record churn events (only if we have a previous snapshot to compare)
-        if previous:
+        # Record churn events only if:
+        # 1. We have a previous snapshot (not first poll ever)
+        # 2. This is not the initialization snapshot (don't count existing processes as spawned)
+        # 3. Enough time has passed since last snapshot (debounce for concurrent requests)
+        if previous and not is_first_snapshot and should_record_churn:
             for proc in spawned:
                 self.churn_tracker.record_spawn(device_serial, proc)
             for proc in killed:
@@ -516,6 +580,9 @@ class ProcessMonitor:
     
     def get_churn_stats(self, device_serial: str, window_seconds: int = 60) -> Dict:
         return self.churn_tracker.get_churn_stats(device_serial, window_seconds)
+    
+    def get_churn_history(self, device_serial: str, limit: int = 500) -> Dict:
+        return self.churn_tracker.get_full_history(device_serial, limit)
     
     def cleanup_metrics(self, device_serial: str, current_pids: List[int]):
         if device_serial in self.metrics_storage:

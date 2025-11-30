@@ -1,12 +1,20 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { useToast } from '../../../../composables/useToast'
+import { usePollingSession } from './usePollingSession'
 
 const ERROR_KEY_PROCESSES = 'processes-fetch'
 
 export function useProcesses(deviceSerial, options = {}) {
   const { extraFetchers = [] } = options
   const toast = useToast()
+  const {
+    isPrimary,
+    activeIntervalMs,
+    sessionRegistered,
+    updateInterval: updateSessionInterval
+  } = usePollingSession(deviceSerial)
+  
   const processes = ref([])
   const stats = ref({})
   const loading = ref(false)
@@ -96,11 +104,29 @@ export function useProcesses(deviceSerial, options = {}) {
     }
   }
 
-  const setRefreshInterval = (newIntervalMs) => {
-    refreshInterval.value = newIntervalMs
+  const setRefreshInterval = async (newIntervalMs) => {
+    const result = await updateSessionInterval(newIntervalMs)
+    
+    if (!result) {
+      toast.error('Failed to update refresh interval')
+      return false
+    }
+    
+    if (!result.success) {
+      // Secondary tab tried to change interval - show warning and use active interval
+      toast.warning(result.message)
+      refreshInterval.value = result.activeInterval
+      if (autoRefresh.value) {
+        startAutoRefresh()
+      }
+      return false
+    }
+    
+    refreshInterval.value = result.activeInterval
     if (autoRefresh.value) {
       startAutoRefresh()
     }
+    return true
   }
 
   onMounted(async () => {
@@ -127,6 +153,8 @@ export function useProcesses(deviceSerial, options = {}) {
     refreshAll,
     toggleAutoRefresh,
     setRefreshInterval,
-    updateMemoryHistory
+    updateMemoryHistory,
+    isPrimary,
+    sessionRegistered
   }
 }

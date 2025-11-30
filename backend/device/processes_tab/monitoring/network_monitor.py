@@ -5,6 +5,7 @@ from collections import defaultdict, deque
 import time
 from core.logger import get_logger
 from core.adb_manager import ADBManager
+from device.processes_tab.monitoring.cache import device_metrics_cache
 
 logger = get_logger(__name__, "device")
 
@@ -19,31 +20,37 @@ class NetworkMonitor:
         logger.info("NetworkMonitor initialized")
     
     def get_network_stats(self, device_serial: str, focused_pid: Optional[int] = None) -> Dict:
-        try:
-            throughput = self._get_throughput(device_serial)
-            endpoints = self._get_recent_endpoints(device_serial)
-            
-            result = {
-                "throughput": throughput,
-                "recent_endpoints": endpoints
-            }
-            
-            if focused_pid:
-                focused = self._get_process_connections(device_serial, focused_pid)
-                if focused:
-                    result["focused_process"] = focused
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"Failed to get network stats for {device_serial}: {str(e)}")
-            return {
-                "throughput": {
-                    "bytes_sent_per_sec": 0,
-                    "bytes_recv_per_sec": 0
-                },
-                "recent_endpoints": []
-            }
+        # Use cache to prevent race conditions from concurrent requests
+        cache_key = f"network:{device_serial}:{focused_pid or 'none'}"
+        
+        def compute():
+            try:
+                throughput = self._get_throughput(device_serial)
+                endpoints = self._get_recent_endpoints(device_serial)
+                
+                result = {
+                    "throughput": throughput,
+                    "recent_endpoints": endpoints
+                }
+                
+                if focused_pid:
+                    focused = self._get_process_connections(device_serial, focused_pid)
+                    if focused:
+                        result["focused_process"] = focused
+                
+                return result
+                
+            except Exception as e:
+                logger.error(f"Failed to get network stats for {device_serial}: {str(e)}")
+                return {
+                    "throughput": {
+                        "bytes_sent_per_sec": 0,
+                        "bytes_recv_per_sec": 0
+                    },
+                    "recent_endpoints": []
+                }
+        
+        return device_metrics_cache.get_or_compute(cache_key, compute, ttl=1.5)
     
     def _get_throughput(self, device_serial: str) -> Dict:
         try:

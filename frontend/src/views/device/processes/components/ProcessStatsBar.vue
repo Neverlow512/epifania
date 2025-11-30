@@ -176,7 +176,14 @@
               </svg>
             </div>
             <span class="text-xs text-slate-400 font-medium">Churn</span>
-            <span class="ml-auto text-[10px] text-slate-600">{{ churn.window_seconds || 60 }}s</span>
+            <button
+              type="button"
+              class="ml-auto text-[9px] text-slate-500 hover:text-orange-400 transition-colors border border-slate-700 hover:border-orange-500/50 rounded px-1.5 py-0.5"
+              @click="openChurnHistory"
+            >
+              History
+            </button>
+            <span class="text-[10px] text-slate-600">{{ churn.window_seconds || 60 }}s</span>
           </div>
           <div class="flex items-center gap-3 mb-2">
             <div class="text-center">
@@ -208,17 +215,32 @@
               {{ tab }}
             </button>
           </div>
-          <div class="join join-xs">
-            <button
-              v-for="option in intervalOptions"
-              :key="option"
-              type="button"
-              class="btn btn-xs join-item px-2"
-              :class="option === refreshInterval ? 'btn-primary' : 'btn-ghost text-slate-400'"
-              @click="$emit('update-refresh-interval', option)"
+          <div class="flex items-center gap-2">
+            <div
+              v-if="!isPrimary"
+              class="tooltip tooltip-left"
+              data-tip="Another tab is controlling the interval. Close other tabs to change it."
             >
-              {{ option / 1000 }}s
-            </button>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                Secondary
+              </span>
+            </div>
+            <div class="join join-xs">
+              <button
+                v-for="option in intervalOptions"
+                :key="option"
+                type="button"
+                class="btn btn-xs join-item px-2"
+                :class="[
+                  option === refreshInterval ? 'btn-primary' : 'btn-ghost text-slate-400',
+                  !isPrimary && option !== refreshInterval ? 'opacity-50 cursor-not-allowed' : ''
+                ]"
+                :disabled="!isPrimary && option !== refreshInterval"
+                @click="$emit('update-refresh-interval', option)"
+              >
+                {{ option / 1000 }}s
+              </button>
+            </div>
           </div>
         </div>
 
@@ -665,6 +687,151 @@
       </div>
     </Teleport>
 
+    <!-- Churn History Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showChurnHistory"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      >
+        <div
+          class="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          @click="showChurnHistory = false"
+        ></div>
+        <div class="relative bg-neutral-900 border border-primary/30 rounded-xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-neutral-800">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center">
+                <svg class="w-5 h-5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-lg font-semibold text-white">Process Churn History</h3>
+                <p class="text-xs text-slate-500">
+                  Chronological log of spawn/kill events since monitoring started
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm btn-circle"
+              @click="showChurnHistory = false"
+            >
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="p-4 space-y-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-4 text-xs">
+                <div class="flex items-center gap-2">
+                  <span class="text-slate-500">Total:</span>
+                  <span class="text-white font-mono">{{ churnHistory.total_events || 0 }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-green-400">Spawned:</span>
+                  <span class="text-white font-mono">{{ churnHistory.total_spawned || 0 }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-red-400">Killed:</span>
+                  <span class="text-white font-mono">{{ churnHistory.total_killed || 0 }}</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <select
+                  v-model="churnHistoryFilter"
+                  class="select select-xs select-bordered bg-neutral-800 border-neutral-700 text-slate-300"
+                >
+                  <option value="all">All events</option>
+                  <option value="spawn">Spawned only</option>
+                  <option value="kill">Killed only</option>
+                </select>
+                <button
+                  type="button"
+                  class="btn btn-xs btn-ghost"
+                  :class="{ 'loading': loadingChurnHistory }"
+                  @click="$emit('load-churn-history')"
+                >
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            <div class="bg-black/40 rounded-lg border border-neutral-800 p-3 text-xs text-slate-400 space-y-1">
+              <p>
+                <span class="text-orange-400 font-medium">What is churn?</span>
+                Process churn tracks when processes spawn (start) and get killed (terminate).
+              </p>
+              <p>
+                <span class="text-slate-300">The "{{ churn.window_seconds || 60 }}s" window</span> in the main display shows events from the last {{ churn.window_seconds || 60 }} seconds only.
+                This history shows <span class="text-white">all recorded events</span> since monitoring began (up to 1000 per type).
+              </p>
+              <p class="text-slate-500">
+                Note: ADB commands used for monitoring spawn shell processes (sh, ps, grep) that immediately exit, contributing to baseline churn.
+              </p>
+            </div>
+
+            <div class="max-h-[45vh] overflow-y-auto border border-neutral-800 rounded-lg">
+              <table class="table table-xs w-full">
+                <thead class="sticky top-0 bg-neutral-900 z-10">
+                  <tr class="text-slate-400 border-neutral-800">
+                    <th class="w-20">Type</th>
+                    <th class="w-24">Time</th>
+                    <th class="w-16">PID</th>
+                    <th>Name</th>
+                    <th class="w-24">User</th>
+                    <th class="w-20 text-right">Age</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="loadingChurnHistory" class="border-neutral-800">
+                    <td colspan="6" class="text-center py-8">
+                      <span class="loading loading-spinner loading-sm text-primary"></span>
+                      <span class="ml-2 text-slate-500">Loading history...</span>
+                    </td>
+                  </tr>
+                  <tr
+                    v-else-if="filteredChurnHistory.length === 0"
+                    class="border-neutral-800"
+                  >
+                    <td colspan="6" class="text-center py-8 text-slate-500">
+                      No churn events recorded yet. Events will appear as processes spawn and exit.
+                    </td>
+                  </tr>
+                  <tr
+                    v-else
+                    v-for="(event, idx) in filteredChurnHistory"
+                    :key="idx"
+                    class="border-neutral-800 hover:bg-neutral-800/50"
+                  >
+                    <td>
+                      <span
+                        class="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                        :class="event.type === 'spawn' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'"
+                      >
+                        {{ event.type === 'spawn' ? 'SPAWN' : 'KILL' }}
+                      </span>
+                    </td>
+                    <td class="font-mono text-slate-300">{{ formatTimestamp(event.time_iso) }}</td>
+                    <td class="font-mono text-primary">{{ event.pid }}</td>
+                    <td class="text-slate-200 truncate max-w-[200px]" :title="event.name">{{ event.name }}</td>
+                    <td class="text-slate-400 truncate max-w-[100px]" :title="event.user">{{ event.user }}</td>
+                    <td class="text-right text-slate-500 font-mono">{{ event.seconds_ago }}s</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div v-if="churnHistory.limited" class="text-center text-xs text-slate-500">
+              Showing first 500 events. Total: {{ churnHistory.total_events }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Memory Details Modal -->
     <Teleport to="body">
       <div
@@ -878,6 +1045,14 @@ export default {
       type: Number,
       default: 60
     },
+    churnHistory: {
+      type: Object,
+      default: () => ({ events: [], total_events: 0, total_spawned: 0, total_killed: 0, limited: false })
+    },
+    loadingChurnHistory: {
+      type: Boolean,
+      default: false
+    },
     autoRefresh: {
       type: Boolean,
       default: true
@@ -901,15 +1076,21 @@ export default {
     memoryHistory: {
       type: Array,
       default: () => []
+    },
+    isPrimary: {
+      type: Boolean,
+      default: true
     }
   },
-  emits: ['refresh', 'toggle-auto-refresh', 'update-refresh-interval', 'load-network-connections'],
+  emits: ['refresh', 'toggle-auto-refresh', 'update-refresh-interval', 'load-network-connections', 'load-churn-history'],
   data() {
     return {
       activeTab: 'Overview',
       tabs: ['Overview', 'CPU', 'Network', 'Activity'],
       showCpuDetails: false,
-      showMemoryDetails: false
+      showMemoryDetails: false,
+      showChurnHistory: false,
+      churnHistoryFilter: 'all'
     }
   },
   computed: {
@@ -979,6 +1160,11 @@ export default {
       if (percent < 0) return 0
       if (percent > 100) return 100
       return percent.toFixed(1)
+    },
+    filteredChurnHistory() {
+      if (!this.churnHistory || !this.churnHistory.events) return []
+      if (this.churnHistoryFilter === 'all') return this.churnHistory.events
+      return this.churnHistory.events.filter(e => e.type === this.churnHistoryFilter)
     }
   },
   methods: {
@@ -1027,6 +1213,15 @@ export default {
       if (v < 1024) return `${v} B/s`
       if (v < 1024 * 1024) return `${(v / 1024).toFixed(0)} KB/s`
       return `${(v / (1024 * 1024)).toFixed(1)} MB/s`
+    },
+    openChurnHistory() {
+      this.showChurnHistory = true
+      this.$emit('load-churn-history')
+    },
+    formatTimestamp(isoString) {
+      if (!isoString) return ''
+      const date = new Date(isoString)
+      return date.toLocaleTimeString()
     }
   }
 }

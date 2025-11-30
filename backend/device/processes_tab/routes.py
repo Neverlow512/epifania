@@ -1,11 +1,13 @@
 from fastapi import APIRouter, HTTPException
 from typing import Optional
+from pydantic import BaseModel
 from core.device_manager import DeviceManager
 from device.processes_tab.monitoring.dprocess_monitor import ProcessMonitor
 from device.processes_tab.monitoring.cpu_monitor import CPUMonitor
 from device.processes_tab.monitoring.memory_monitor import MemoryMonitor
 from device.processes_tab.monitoring.storage_monitor import StorageMonitor
 from device.processes_tab.monitoring.network_monitor import NetworkMonitor
+from device.processes_tab.monitoring.cache import polling_session
 from core.logger import get_logger
 
 logger = get_logger(__name__, "device")
@@ -18,6 +20,61 @@ cpu_monitor = CPUMonitor(adb_manager=device_manager.adb_manager)
 memory_monitor = MemoryMonitor(adb_manager=device_manager.adb_manager)
 storage_monitor = StorageMonitor(adb_manager=device_manager.adb_manager)
 network_monitor = NetworkMonitor(adb_manager=device_manager.adb_manager)
+
+
+class SessionRequest(BaseModel):
+    client_id: str
+    interval_ms: int = 2000
+
+
+@router.post("/{device_id}/session/register")
+async def register_session(device_id: str, request: SessionRequest):
+    # Register a polling session for a device
+    # First client becomes primary and controls the interval
+    try:
+        if not device_manager.is_device_connected(device_id):
+            raise HTTPException(status_code=404, detail="Device not found")
+        
+        is_primary, message, active_interval = polling_session.register(
+            device_id, request.client_id, request.interval_ms
+        )
+        
+        return {
+            "is_primary": is_primary,
+            "message": message,
+            "active_interval_ms": active_interval,
+            "client_id": request.client_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to register session for {device_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{device_id}/session/unregister")
+async def unregister_session(device_id: str, request: SessionRequest):
+    # Unregister a polling session when tab closes
+    try:
+        polling_session.unregister(device_id, request.client_id)
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Failed to unregister session: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{device_id}/session/info")
+async def get_session_info(device_id: str):
+    # Get current session info for a device
+    try:
+        info = polling_session.get_session_info(device_id)
+        if not info:
+            return {"active": False}
+        return {"active": True, **info}
+    except Exception as e:
+        logger.error(f"Failed to get session info: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{device_id}/processes")
@@ -92,6 +149,24 @@ async def get_process_churn(device_id: str, window: int = 60):
         raise
     except Exception as e:
         logger.error(f"Failed to get churn stats for {device_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{device_id}/processes/churn/history")
+async def get_process_churn_history(device_id: str, limit: int = 500):
+    try:
+        logger.info(f"Process churn history requested for device {device_id}, limit={limit}")
+        
+        if not device_manager.is_device_connected(device_id):
+            raise HTTPException(status_code=404, detail="Device not found")
+        
+        history = process_monitor.get_churn_history(device_id, limit)
+        return history
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get churn history for {device_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -3,6 +3,7 @@ import axios from 'axios'
 import { useToast } from '../../../../composables/useToast'
 
 const ERROR_KEY_CHURN = 'process-churn'
+const ERROR_KEY_HISTORY = 'process-churn-history'
 
 export function useProcessChurn(deviceSerial) {
   const toast = useToast()
@@ -16,6 +17,15 @@ export function useProcessChurn(deviceSerial) {
     recent_spawned: [],
     recent_killed: []
   })
+
+  const churnHistory = ref({
+    events: [],
+    total_events: 0,
+    total_spawned: 0,
+    total_killed: 0,
+    limited: false
+  })
+  const loadingHistory = ref(false)
 
   const fetchProcessChurn = async () => {
     try {
@@ -31,6 +41,23 @@ export function useProcessChurn(deviceSerial) {
     }
   }
 
+  const fetchChurnHistory = async (limit = 500) => {
+    try {
+      loadingHistory.value = true
+      const baseUrl = `http://localhost:8000/api/devices/${deviceSerial}`
+      const response = await axios.get(`${baseUrl}/processes/churn/history`, {
+        params: { limit }
+      })
+      churnHistory.value = response.data || churnHistory.value
+      toast.clearError(ERROR_KEY_HISTORY)
+    } catch (err) {
+      console.error('Failed to fetch churn history:', err)
+      toast.error('Failed to fetch churn history', ERROR_KEY_HISTORY)
+    } finally {
+      loadingHistory.value = false
+    }
+  }
+
   const setChurnWindow = (seconds) => {
     churnWindowSeconds.value = seconds
   }
@@ -38,7 +65,10 @@ export function useProcessChurn(deviceSerial) {
   return {
     churn,
     churnWindowSeconds,
+    churnHistory,
+    loadingHistory,
     fetchProcessChurn,
+    fetchChurnHistory,
     setChurnWindow
   }
 }

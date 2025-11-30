@@ -48,16 +48,20 @@
           :networkConnectionsCount="networkConnectionsCount"
           :churn="churn"
           :churnWindowSeconds="churnWindowSeconds"
+          :churnHistory="churnHistory"
+          :loadingChurnHistory="loadingHistory"
           :autoRefresh="autoRefresh"
           :refreshInterval="refreshInterval"
           :lastUpdate="lastUpdate"
           :loading="loading"
           :processHistory="processHistory"
           :memoryHistory="memoryHistory"
+          :isPrimary="isPrimary"
           @refresh="handleRefresh"
           @toggle-auto-refresh="toggleAutoRefresh"
           @update-refresh-interval="setRefreshInterval"
           @load-network-connections="loadNetworkConnections"
+          @load-churn-history="fetchChurnHistory"
         />
         </div>
       </div>
@@ -126,7 +130,10 @@ export default {
     const {
       churn,
       churnWindowSeconds,
-      fetchProcessChurn
+      churnHistory,
+      loadingHistory,
+      fetchProcessChurn,
+      fetchChurnHistory
     } = useProcessChurn(props.device.serial)
 
     const {
@@ -142,7 +149,9 @@ export default {
       processHistory,
       memoryHistory,
       setRefreshInterval,
-      updateMemoryHistory
+      updateMemoryHistory,
+      isPrimary,
+      sessionRegistered
     } = useProcesses(props.device.serial, {
       extraFetchers: [
         async () => {
@@ -205,6 +214,7 @@ export default {
       processHistory,
       memoryHistory,
       setRefreshInterval,
+      isPrimary,
       cpu,
       memory,
       storage,
@@ -214,6 +224,9 @@ export default {
       networkConnectionsCount,
       churn,
       churnWindowSeconds,
+      churnHistory,
+      loadingHistory,
+      fetchChurnHistory,
       searchQuery,
       filterType,
       sortBy,

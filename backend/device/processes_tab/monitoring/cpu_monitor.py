@@ -5,6 +5,7 @@ from collections import defaultdict
 import time
 from core.logger import get_logger
 from core.adb_manager import ADBManager
+from device.processes_tab.monitoring.cache import device_metrics_cache
 
 logger = get_logger(__name__, "device")
 
@@ -17,20 +18,26 @@ class CPUMonitor:
         logger.info("CPUMonitor initialized")
     
     def get_cpu_stats(self, device_serial: str, top_n: int = 5) -> Dict:
-        try:
-            overall = self._get_overall_cpu(device_serial)
-            top_consumers = self._get_top_consumers(device_serial, top_n)
-            
-            return {
-                "overall_percent": overall,
-                "top_consumers": top_consumers
-            }
-        except Exception as e:
-            logger.error(f"Failed to get CPU stats for {device_serial}: {str(e)}")
-            return {
-                "overall_percent": 0.0,
-                "top_consumers": []
-            }
+        # Use cache to prevent race conditions from concurrent requests
+        cache_key = f"cpu:{device_serial}:{top_n}"
+        
+        def compute():
+            try:
+                overall = self._get_overall_cpu(device_serial)
+                top_consumers = self._get_top_consumers(device_serial, top_n)
+                
+                return {
+                    "overall_percent": overall,
+                    "top_consumers": top_consumers
+                }
+            except Exception as e:
+                logger.error(f"Failed to get CPU stats for {device_serial}: {str(e)}")
+                return {
+                    "overall_percent": 0.0,
+                    "top_consumers": []
+                }
+        
+        return device_metrics_cache.get_or_compute(cache_key, compute, ttl=1.5)
     
     def _get_overall_cpu(self, device_serial: str) -> float:
         try:
