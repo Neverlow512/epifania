@@ -133,7 +133,7 @@ class CPUMonitor:
                     pid = int(parts[0])
                     
                     # Column 8 is CPU% (after PID USER PR NI VIRT RES SHR S)
-                    cpu_percent = float(parts[8])
+                    cpu_percent = float(parts[8].replace('%', ''))
                     
                     # ARGS starts at column 11 - take first word as process name
                     args = ' '.join(parts[11:])

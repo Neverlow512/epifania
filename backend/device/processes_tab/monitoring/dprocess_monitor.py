@@ -127,7 +127,12 @@ class ProcessMonitor:
             previous = self.previous_snapshots.get(device_serial, {})
             for process in processes:
                 pid = process['pid']
-                prev_mem = previous.get(pid, {}).get('memory_mb', process['memory_mb'])
+                prev_data = previous.get(pid, {})
+                # Only use previous memory if same process (name + user match to handle PID reuse)
+                if prev_data.get('name') == process['name'] and prev_data.get('user') == process['user']:
+                    prev_mem = prev_data.get('memory_mb', process['memory_mb'])
+                else:
+                    prev_mem = process['memory_mb']
                 process['memory_delta_mb'] = round(process['memory_mb'] - prev_mem, 2)
             
             current_snapshot = {p['pid']: p for p in processes}
@@ -152,7 +157,7 @@ class ProcessMonitor:
             
             states = {}
             current_pid = None
-            current_info = {}
+            current_info = None
             
             for line in result.split('\n'):
                 line = line.strip()
@@ -169,19 +174,19 @@ class ProcessMonitor:
                     elif '*APP*' in line:
                         current_info['type'] = 'app'
                     
-                elif 'pid=' in line and current_info:
+                elif 'pid=' in line and current_info is not None:
                     match = re.search(r'pid=(\d+)', line)
                     if match:
                         current_pid = int(match.group(1))
                 
-                elif 'curProcState=' in line and current_info:
+                elif 'curProcState=' in line and current_info is not None:
                     match = re.search(r'curProcState=(\d+)', line)
                     if match:
                         proc_state = int(match.group(1))
                         current_info['proc_state'] = proc_state
                         current_info['state_label'] = PROC_STATE_MAP.get(proc_state, 'background')
                 
-                elif 'cached=' in line and current_info:
+                elif 'cached=' in line and current_info is not None:
                     current_info['cached'] = 'cached=true' in line
             
             if current_pid and current_info:
