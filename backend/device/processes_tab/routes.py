@@ -8,6 +8,7 @@ from device.processes_tab.monitoring.memory_monitor import MemoryMonitor
 from device.processes_tab.monitoring.storage_monitor import StorageMonitor
 from device.processes_tab.monitoring.network_monitor import NetworkMonitor
 from device.processes_tab.monitoring.cache import polling_session
+from device.processes_tab.overview.process_inspector import ProcessInspector
 from core.logger import get_logger
 
 logger = get_logger(__name__, "device")
@@ -20,6 +21,7 @@ cpu_monitor = CPUMonitor(adb_manager=device_manager.adb_manager)
 memory_monitor = MemoryMonitor(adb_manager=device_manager.adb_manager)
 storage_monitor = StorageMonitor(adb_manager=device_manager.adb_manager)
 network_monitor = NetworkMonitor(adb_manager=device_manager.adb_manager)
+process_inspector = ProcessInspector(adb_manager=device_manager.adb_manager)
 
 
 class SessionRequest(BaseModel):
@@ -189,6 +191,29 @@ async def get_process_details(device_id: str, pid: int):
         raise
     except Exception as e:
         logger.error(f"Failed to get process details for {pid} on {device_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{device_id}/processes/{pid}/overview")
+async def get_process_overview(device_id: str, pid: int):
+    try:
+        logger.info(f"Process overview requested for PID {pid} on device {device_id}")
+        
+        if not device_manager.is_device_connected(device_id):
+            raise HTTPException(status_code=404, detail="Device not found")
+        
+        has_root = device_manager.adb_manager.check_root_access(device_id)
+        overview = process_inspector.inspect(device_id, pid, has_root)
+        
+        if not overview:
+            raise HTTPException(status_code=404, detail=f"Process {pid} not found or inaccessible")
+        
+        return overview
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get process overview for {pid} on {device_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

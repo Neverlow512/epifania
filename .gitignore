@@ -87,3 +87,5 @@ htmlcov/
 history_docs/
 backend/frida_servers/
 tests/
+
+.cursor/rules/
