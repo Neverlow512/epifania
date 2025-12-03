@@ -9,6 +9,10 @@ from device.processes_tab.monitoring.storage_monitor import StorageMonitor
 from device.processes_tab.monitoring.network_monitor import NetworkMonitor
 from device.processes_tab.monitoring.cache import polling_session
 from device.processes_tab.overview.process_inspector import ProcessInspector
+from device.processes_tab.overview.cache import (
+    overview_polling_session,
+    process_overview_cache
+)
 from core.logger import get_logger
 
 logger = get_logger(__name__, "device")
@@ -27,6 +31,11 @@ process_inspector = ProcessInspector(adb_manager=device_manager.adb_manager)
 class SessionRequest(BaseModel):
     client_id: str
     interval_ms: int = 2000
+
+
+class OverviewSessionRequest(BaseModel):
+    client_id: str
+    interval_ms: int = 5000
 
 
 @router.post("/{device_id}/session/register")
@@ -195,18 +204,34 @@ async def get_process_details(device_id: str, pid: int):
 
 
 @router.get("/{device_id}/processes/{pid}/overview")
-async def get_process_overview(device_id: str, pid: int):
+async def get_process_overview(device_id: str, pid: int, force_refresh: bool = False):
     try:
         logger.info(f"Process overview requested for PID {pid} on device {device_id}")
         
         if not device_manager.is_device_connected(device_id):
             raise HTTPException(status_code=404, detail="Device not found")
         
-        has_root = device_manager.adb_manager.check_root_access(device_id)
-        overview = process_inspector.inspect(device_id, pid, has_root)
+        def compute_overview():
+            has_root = device_manager.adb_manager.check_root_access(device_id)
+            return process_inspector.inspect(device_id, pid, has_root)
+        
+        if force_refresh:
+            process_overview_cache.invalidate(device_id, pid)
+        
+        overview, is_cached, age = process_overview_cache.get_or_compute(
+            device_id, pid, compute_overview
+        )
         
         if not overview:
-            raise HTTPException(status_code=404, detail=f"Process {pid} not found or inaccessible")
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Process {pid} not found or inaccessible"
+            )
+        
+        overview["_cache"] = {
+            "is_cached": is_cached,
+            "age_seconds": round(age, 2)
+        }
         
         return overview
         
@@ -214,6 +239,52 @@ async def get_process_overview(device_id: str, pid: int):
         raise
     except Exception as e:
         logger.error(f"Failed to get process overview for {pid} on {device_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{device_id}/overview/session/register")
+async def register_overview_session(device_id: str, request: OverviewSessionRequest):
+    try:
+        if not device_manager.is_device_connected(device_id):
+            raise HTTPException(status_code=404, detail="Device not found")
+        
+        is_primary, message, active_interval = overview_polling_session.register(
+            device_id, request.client_id, request.interval_ms
+        )
+        
+        return {
+            "is_primary": is_primary,
+            "message": message,
+            "active_interval_ms": active_interval,
+            "client_id": request.client_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to register overview session for {device_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{device_id}/overview/session/unregister")
+async def unregister_overview_session(device_id: str, request: OverviewSessionRequest):
+    try:
+        overview_polling_session.unregister(device_id, request.client_id)
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Failed to unregister overview session: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{device_id}/overview/session/info")
+async def get_overview_session_info(device_id: str):
+    try:
+        info = overview_polling_session.get_session_info(device_id)
+        if not info:
+            return {"active": False}
+        return {"active": True, **info}
+    except Exception as e:
+        logger.error(f"Failed to get overview session info: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

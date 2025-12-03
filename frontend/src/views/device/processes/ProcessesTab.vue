@@ -1,7 +1,6 @@
 <template>
   <div class="space-y-4">
     <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
-      <!-- Left: processes widget (filters + table) -->
       <div class="lg:col-span-3">
         <div class="card bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20 h-full">
           <div class="card-body p-4 space-y-4">
@@ -24,9 +23,8 @@
                 :totalCount="filteredProcesses.length"
                 :currentPage="currentPage"
                 :loading="loading"
-                :focusedPid="selectedProcess ? selectedProcess.pid : null"
-                @inspect="showProcessDetails"
-                @kill="confirmKill"
+                :focusedPid="expandedPid"
+                @toggle-overview="handleToggleOverview"
                 @page-change="currentPage = $event"
               />
             </div>
@@ -34,9 +32,35 @@
         </div>
       </div>
 
-      <!-- Right: compact stats / overview widget (sticky on scroll) -->
       <div class="lg:col-span-2">
-        <div class="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
+        <div class="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto space-y-4">
+          <Transition
+            enter-active-class="transition-all duration-300 ease-out"
+            enter-from-class="opacity-0 translate-x-4 scale-95"
+            enter-to-class="opacity-100 translate-x-0 scale-100"
+            leave-active-class="transition-all duration-200 ease-in"
+            leave-from-class="opacity-100 translate-x-0 scale-100"
+            leave-to-class="opacity-0 translate-x-4 scale-95"
+          >
+            <ProcessOverviewPanel
+              v-if="expandedPid"
+              :data="overviewData"
+              :loading="overviewLoading"
+              :error="overviewError"
+              :autoRefresh="overviewAutoRefresh"
+              :refreshInterval="overviewRefreshInterval"
+              :lastUpdate="overviewLastUpdate"
+              :isCached="overviewIsCached"
+              :isPrimary="overviewIsPrimary"
+              @inspect-process="handleInspectProcess"
+              @kill-process="handleKillProcess"
+              @close="handleCloseOverview"
+              @refresh="handleRefreshOverview"
+              @toggle-auto-refresh="handleToggleOverviewAutoRefresh"
+              @update-refresh-interval="handleUpdateOverviewInterval"
+            />
+          </Transition>
+
           <ProcessStatsBar
           :stats="stats"
           :cpu="cpu"
@@ -67,16 +91,6 @@
       </div>
     </div>
 
-    <ProcessDetailsModal
-      :show="showDetailsModal"
-      :process="selectedProcess"
-      :details="processDetails"
-      :memoryDetails="processMemoryDetails"
-      :networkDetails="processNetworkDetails"
-      :loading="loadingDetails"
-      @close="closeDetailsModal"
-    />
-
     <ProcessKillModal
       :show="showKillModal"
       :process="processToKill"
@@ -91,11 +105,12 @@
 import ProcessStatsBar from './components/ProcessStatsBar.vue'
 import ProcessControlBar from './components/ProcessControlBar.vue'
 import ProcessTable from './components/ProcessTable.vue'
-import ProcessDetailsModal from './components/ProcessDetailsModal.vue'
 import ProcessKillModal from './components/ProcessKillModal.vue'
+import ProcessOverviewPanel from './components/ProcessOverviewPanel.vue'
 import { useProcesses } from './composables/useProcesses'
 import { useProcessFilters } from './composables/useProcessFilters'
 import { useProcessActions } from './composables/useProcessActions'
+import { useProcessOverview } from './composables/useProcessOverview'
 import { useSystemMetrics } from './composables/useSystemMetrics'
 import { useProcessChurn } from './composables/useProcessChurn'
 
@@ -105,8 +120,8 @@ export default {
     ProcessStatsBar,
     ProcessControlBar,
     ProcessTable,
-    ProcessDetailsModal,
-    ProcessKillModal
+    ProcessKillModal,
+    ProcessOverviewPanel
   },
   props: {
     device: {
@@ -179,21 +194,31 @@ export default {
     } = useProcessFilters(processes)
 
     const {
-      selectedProcess,
-      showDetailsModal,
-      loadingDetails,
-      processDetails,
-      processMemoryDetails,
-      processNetworkDetails,
       processToKill,
       showKillModal,
       killing,
-      showProcessDetails,
-      closeDetailsModal,
       confirmKill,
       closeKillModal,
       killProcess
     } = useProcessActions(props.device.serial, fetchProcesses)
+
+    const {
+      expandedPid,
+      overviewData,
+      loading: overviewLoading,
+      error: overviewError,
+      lastUpdate: overviewLastUpdate,
+      isCached: overviewIsCached,
+      autoRefresh: overviewAutoRefresh,
+      refreshInterval: overviewRefreshInterval,
+      isPrimary: overviewIsPrimary,
+      toggleOverview,
+      inspectProcess,
+      closeOverview,
+      forceRefreshOverview,
+      toggleAutoRefresh: toggleOverviewAutoRefresh,
+      setRefreshInterval: setOverviewRefreshInterval
+    } = useProcessOverview(props.device.serial)
 
     const handleRefresh = async () => {
       await refreshAll()
@@ -201,6 +226,37 @@ export default {
 
     const loadNetworkConnections = async () => {
       await fetchNetworkConnections()
+    }
+
+    const handleToggleOverview = (process) => {
+      toggleOverview(process.pid)
+    }
+
+    const handleInspectProcess = (pid) => {
+      inspectProcess(pid)
+    }
+
+    const handleKillProcess = (pid) => {
+      const process = processes.value.find(p => p.pid === pid)
+      if (process) {
+        confirmKill(process)
+      }
+    }
+
+    const handleCloseOverview = () => {
+      closeOverview()
+    }
+
+    const handleRefreshOverview = () => {
+      forceRefreshOverview()
+    }
+
+    const handleToggleOverviewAutoRefresh = () => {
+      toggleOverviewAutoRefresh()
+    }
+
+    const handleUpdateOverviewInterval = (intervalMs) => {
+      setOverviewRefreshInterval(intervalMs)
     }
 
     return {
@@ -237,24 +293,30 @@ export default {
       paginatedProcesses,
       startIndex,
       endIndex,
-      selectedProcess,
-      showDetailsModal,
-      loadingDetails,
-      processDetails,
-      processMemoryDetails,
-      processNetworkDetails,
       processToKill,
       showKillModal,
       killing,
-      showProcessDetails,
-      closeDetailsModal,
-      confirmKill,
       closeKillModal,
       killProcess,
+      expandedPid,
+      overviewData,
+      overviewLoading,
+      overviewError,
+      overviewLastUpdate,
+      overviewIsCached,
+      overviewAutoRefresh,
+      overviewRefreshInterval,
+      overviewIsPrimary,
       handleRefresh,
-      loadNetworkConnections
+      loadNetworkConnections,
+      handleToggleOverview,
+      handleInspectProcess,
+      handleKillProcess,
+      handleCloseOverview,
+      handleRefreshOverview,
+      handleToggleOverviewAutoRefresh,
+      handleUpdateOverviewInterval
     }
   }
 }
 </script>
-

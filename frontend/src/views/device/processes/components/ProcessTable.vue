@@ -13,7 +13,7 @@
               State
               <button 
                 class="btn btn-xs btn-ghost btn-circle text-slate-500 hover:text-primary"
-                @click="showStateHelp = true"
+                @click.stop="showStateHelp = true"
                 title="State Dictionary"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -22,27 +22,39 @@
               </button>
             </span>
           </th>
-          <th class="text-slate-400">Actions</th>
         </tr>
       </thead>
       <tbody>
         <tr v-if="loading && paginatedProcesses.length === 0">
-          <td colspan="6" class="text-center py-8">
+          <td colspan="5" class="text-center py-8">
             <span class="loading loading-spinner loading-lg text-primary"></span>
           </td>
         </tr>
         <tr v-else-if="paginatedProcesses.length === 0">
-          <td colspan="6" class="text-center py-8 text-slate-400">
+          <td colspan="5" class="text-center py-8 text-slate-400">
             No processes found
           </td>
         </tr>
         <tr 
+          v-else
           v-for="process in paginatedProcesses" 
           :key="process.pid"
-          class="hover:bg-primary/5 border-b border-neutral-800"
+          class="hover:bg-primary/5 border-b border-neutral-800 cursor-pointer transition-colors"
           :class="process.pid === focusedPid ? 'bg-primary/10 border-primary/40' : ''"
+          @click="$emit('toggle-overview', process)"
         >
-          <td class="font-mono text-primary">{{ process.pid }}</td>
+          <td class="font-mono text-primary">
+            <div class="flex items-center gap-2">
+              <svg 
+                class="w-3 h-3 text-slate-500 transition-transform"
+                :class="process.pid === focusedPid ? 'rotate-90' : ''"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+              {{ process.pid }}
+            </div>
+          </td>
           <td class="text-white">
             <div class="flex items-center gap-2">
               <span class="font-medium">{{ process.name }}</span>
@@ -70,29 +82,6 @@
             >
               {{ process.state || 'unknown' }}
             </span>
-          </td>
-          <td>
-            <div class="flex gap-1">
-              <button 
-                class="btn btn-xs btn-ghost text-blue-400"
-                @click="$emit('inspect', process)"
-                title="Inspect"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-              </button>
-              <button 
-                class="btn btn-xs btn-ghost text-red-400"
-                @click="$emit('kill', process)"
-                title="Kill Process"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
           </td>
         </tr>
       </tbody>
@@ -267,7 +256,7 @@ export default {
       default: null
     }
   },
-  emits: ['inspect', 'kill', 'page-change'],
+  emits: ['toggle-overview', 'page-change'],
   data() {
     return {
       showStateHelp: false,
@@ -320,4 +309,3 @@ export default {
   }
 }
 </script>
-

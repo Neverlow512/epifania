@@ -1,5 +1,6 @@
 # Process identity collector - PID info, scheduling, timing
 
+import re
 from typing import Dict, Optional
 from core.logger import get_logger
 from core.adb_manager import ADBManager
@@ -19,6 +20,30 @@ KERNEL_STATE_MAP = {
     "K": "wakekill",
     "P": "parked",
     "I": "idle",
+}
+
+ANDROID_PROC_STATE_MAP = {
+    0: "persistent",
+    1: "persistent",
+    2: "foreground",
+    3: "foreground",
+    4: "visible",
+    5: "service",
+    6: "bound",
+    7: "visible",
+    8: "background",
+    9: "background",
+    10: "background",
+    11: "service",
+    12: "receiver",
+    13: "cached",
+    14: "background",
+    15: "cached",
+    16: "cached",
+    17: "cached",
+    18: "cached",
+    19: "cached",
+    20: "cached",
 }
 
 
@@ -44,11 +69,19 @@ class IdentityCollector:
                 if running_seconds < 0:
                     running_seconds = None
 
+            kernel_state = KERNEL_STATE_MAP.get(stat_data.get("state", ""), "unknown")
+            android_state = self._get_android_state(device_serial, pid)
+            name = stat_data.get("name", "")
+            is_kernel_thread = name.startswith("[") and name.endswith("]")
+
             return {
                 "pid": pid,
-                "name": stat_data.get("name", ""),
-                "state": KERNEL_STATE_MAP.get(stat_data.get("state", ""), "unknown"),
+                "name": name,
+                "state": kernel_state,
+                "kernel_state": kernel_state,
                 "state_char": stat_data.get("state", ""),
+                "android_state": android_state,
+                "is_kernel_thread": is_kernel_thread,
                 "ppid": stat_data.get("ppid"),
                 "uid": status_data.get("uid"),
                 "gid": status_data.get("gid"),
@@ -64,6 +97,27 @@ class IdentityCollector:
 
         except Exception as e:
             logger.error(f"Failed to collect identity for PID {pid}: {str(e)}")
+            return None
+
+    def _get_android_state(self, device_serial: str, pid: int) -> Optional[str]:
+        try:
+            result = self.adb_manager.execute_shell(
+                device_serial,
+                f"dumpsys activity processes 2>/dev/null | grep -A5 'pid={pid}[^0-9]' | head -10"
+            )
+            if not result:
+                return None
+
+            for line in result.split("\n"):
+                if "curProcState=" in line:
+                    match = re.search(r"curProcState=(\d+)", line)
+                    if match:
+                        proc_state = int(match.group(1))
+                        return ANDROID_PROC_STATE_MAP.get(proc_state, "background")
+
+            return None
+        except Exception as e:
+            logger.debug(f"Failed to get Android state for PID {pid}: {e}")
             return None
 
     def _parse_stat(self, device_serial: str, pid: int) -> Optional[Dict]:
