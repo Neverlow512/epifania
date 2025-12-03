@@ -5,6 +5,7 @@ from collections import defaultdict, deque
 from datetime import datetime
 from core.logger import get_logger
 from core.adb_manager import ADBManager
+from device.processes_tab.monitoring.cache import device_metrics_cache
 
 logger = get_logger(__name__, "device")
 
@@ -155,6 +156,14 @@ class ProcessMonitor:
         logger.info("ProcessMonitor initialized")
     
     def list_processes(self, device_serial: str) -> List[Dict]:
+        cache_key = f"processes:{device_serial}"
+        
+        def compute():
+            return self._list_processes_impl(device_serial)
+        
+        return device_metrics_cache.get_or_compute(cache_key, compute)
+    
+    def _list_processes_impl(self, device_serial: str) -> List[Dict]:
         try:
             logger.info(f"Listing processes for device {device_serial}")
             

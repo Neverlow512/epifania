@@ -50,7 +50,7 @@ class NetworkMonitor:
                     "recent_endpoints": []
                 }
         
-        return device_metrics_cache.get_or_compute(cache_key, compute, ttl=1.5)
+        return device_metrics_cache.get_or_compute(cache_key, compute)
     
     def _get_throughput(self, device_serial: str) -> Dict:
         try:
@@ -207,6 +207,7 @@ class NetworkMonitor:
         # Decode hex address format: IP:PORT (e.g., "0100007F:0050" -> "127.0.0.1:80")
         try:
             ip_hex, port_hex = addr_hex.split(':')
+            port = int(port_hex, 16)
             
             # Handle IPv4 (8 hex chars) and IPv6 (32 hex chars)
             if len(ip_hex) == 8:
@@ -219,16 +220,45 @@ class NetworkMonitor:
                     str((ip_int >> 24) & 0xFF)
                 ])
             elif len(ip_hex) == 32:
-                # IPv6 - simplified display
-                ip = "::1" if ip_hex == "00000000000000000000000001000000" else f"ipv6:{ip_hex[:8]}..."
+                ip = self._decode_ipv6(ip_hex)
             else:
                 ip = "unknown"
             
-            port = int(port_hex, 16)
             return f"{ip}:{port}"
             
         except (ValueError, IndexError):
             return "unknown:0"
+    
+    def _decode_ipv6(self, ip_hex: str) -> str:
+        # Decode IPv6 hex address with proper handling of IPv4-mapped addresses
+        if ip_hex == "00000000000000000000000000000000":
+            return "::"
+        if ip_hex == "00000000000000000000000001000000":
+            return "::1"
+        
+        try:
+            # Split into 4-char groups and reverse byte order within each 32-bit word
+            groups = []
+            for i in range(0, 32, 8):
+                word = ip_hex[i:i + 8]
+                reversed_word = word[6:8] + word[4:6] + word[2:4] + word[0:2]
+                groups.append(reversed_word[0:4])
+                groups.append(reversed_word[4:8])
+            
+            # Check for IPv4-mapped IPv6 address (::ffff:x.x.x.x)
+            if (groups[0] == "0000" and groups[1] == "0000" and
+                groups[2] == "0000" and groups[3] == "0000" and
+                groups[4] == "0000" and groups[5].lower() == "ffff"):
+                ipv4_high = int(groups[6], 16)
+                ipv4_low = int(groups[7], 16)
+                ipv4 = f"{(ipv4_high >> 8) & 0xFF}.{ipv4_high & 0xFF}.{(ipv4_low >> 8) & 0xFF}.{ipv4_low & 0xFF}"
+                return ipv4
+            
+            # Format as IPv6
+            formatted = ":".join(g.lstrip("0") or "0" for g in groups)
+            return formatted
+        except (ValueError, IndexError):
+            return f"ipv6:{ip_hex[:8]}..."
     
     def _get_recent_endpoints(self, device_serial: str, max_age: int = 300) -> List[Dict]:
         # Get endpoints from the last max_age seconds

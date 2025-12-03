@@ -43,11 +43,12 @@ class OverviewPollingSession:
                 )
                 return True, "Primary overview session established", interval_ms
             
+            # Update last seen for all clients to keep session alive
             session["clients"][client_id] = current_time
+            session["last_seen"] = current_time
             
             if session["primary_client"] == client_id:
                 session["interval_ms"] = interval_ms
-                session["last_seen"] = current_time
                 return True, "Overview interval updated", interval_ms
             
             active_interval = session["interval_ms"]
@@ -206,7 +207,8 @@ class ProcessOverviewCache:
 
 
 # Singleton instances for Process Overview
-overview_polling_session = OverviewPollingSession(session_timeout=15.0)
+# Session timeout should be short enough to handle tab reloads gracefully
+overview_polling_session = OverviewPollingSession(session_timeout=8.0)
 process_overview_cache = ProcessOverviewCache(
     default_ttl=3.0, 
     polling_session=overview_polling_session

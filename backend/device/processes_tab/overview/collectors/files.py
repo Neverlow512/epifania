@@ -24,8 +24,7 @@ class FilesCollector:
                 "soft_limit": limits.get("soft_limit"),
                 "hard_limit": limits.get("hard_limit"),
                 "categories": categorized,
-                "fds": fds[:100],  # Limit to first 100 for response size
-                "truncated": len(fds) > 100,
+                "fds": fds,
                 "full_access": has_root or self._check_fd_access(device_serial, pid),
             }
 

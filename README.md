@@ -58,6 +58,16 @@ A GUI-based Dynamic Instrumentation Platform wrapping Frida and ADB for security
 - ✅ Unified launcher script for cross-platform deployment
 - ✅ Multi-tab consistency with server-side caching for CPU and Network metrics
 - ✅ Polling session management to prevent race conditions across browser tabs
+- ✅ Process Overview panel with comprehensive per-process inspection
+- ✅ Modular collector architecture for process data (identity, memory, threads, files, network, I/O, relationships)
+- ✅ PSS/USS memory metrics via smaps_rollup and dumpsys meminfo
+- ✅ Thread enumeration with CPU time and state tracking
+- ✅ File descriptor inspection with categorization (files, sockets, pipes, devices)
+- ✅ Per-process TCP/UDP connection tracking with state summary
+- ✅ I/O statistics collection (read/write bytes, syscalls)
+- ✅ Process relationship tree (parent, children, tree depth)
+- ✅ Process Overview caching with configurable TTL
+- ✅ Separate polling session management for Process Overview panel
 
 **In Development:**
 - 🔄 Packages tab for application catalog and lifecycle control
@@ -630,13 +640,13 @@ Retrieves all running processes on the device with memory usage, state, and user
 - Android-managed processes: `foreground`, `visible`, `service`, `bound`, `background`, `cached`, `persistent`, `receiver`
 - System processes: `kernel` (kernel threads), `native` (system daemons), `zombie` (terminated but not cleaned up)
 
-#### Get Process Details
+#### Get Process Details (Legacy)
 
 ```
 GET /api/devices/{device_id}/processes/{pid}
 ```
 
-Retrieves detailed information about a specific process including command line, status, threads, open files, and memory maps.
+Retrieves basic process information. For comprehensive process inspection, use the Process Overview endpoint instead.
 
 **Response:**
 ```json
@@ -669,6 +679,176 @@ Retrieves detailed information about a specific process including command line, 
   ]
 }
 ```
+
+#### Get Process Overview
+
+```
+GET /api/devices/{device_id}/processes/{pid}/overview
+```
+
+Retrieves comprehensive process data using modular collectors. This is the primary endpoint for detailed process inspection.
+
+**Query Parameters:**
+- `force_refresh` (optional): Set to `true` to bypass cache and fetch fresh data
+
+**Response:**
+```json
+{
+  "pid": 1234,
+  "identity": {
+    "pid": 1234,
+    "name": "com.example.app",
+    "state": "sleeping",
+    "state_char": "S",
+    "ppid": 567,
+    "uid": 10123,
+    "gid": 10123,
+    "thread_count": 15,
+    "nice": 0,
+    "priority": 20,
+    "utime_ticks": 12345,
+    "stime_ticks": 6789,
+    "cpu_time_ticks": 19134,
+    "running_seconds": 3600,
+    "cmdline": "com.example.app"
+  },
+  "memory": {
+    "rss_kb": 45000,
+    "vsz_kb": 120000,
+    "peak_kb": 48000,
+    "hwm_kb": 47000,
+    "swap_kb": 0,
+    "pss_kb": 32000,
+    "uss_kb": 28000,
+    "private_clean_kb": 8000,
+    "private_dirty_kb": 20000,
+    "shared_clean_kb": 10000,
+    "shared_dirty_kb": 5000,
+    "smaps_available": true,
+    "dumpsys_available": true,
+    "dumpsys": {
+      "total_pss_kb": 32000,
+      "java_heap_kb": 8000,
+      "native_heap_kb": 12000,
+      "code_kb": 5000,
+      "stack_kb": 500,
+      "graphics_kb": 3000,
+      "system_kb": 3500
+    }
+  },
+  "threads": {
+    "count": 15,
+    "threads": [
+      {
+        "tid": 1234,
+        "name": "main",
+        "state": "sleeping",
+        "state_char": "S",
+        "utime_ticks": 5000,
+        "stime_ticks": 2000,
+        "cpu_time_ticks": 7000,
+        "is_main": true
+      }
+    ],
+    "main_thread_tid": 1234
+  },
+  "files": {
+    "count": 42,
+    "max_fds": 32768,
+    "soft_limit": 1024,
+    "hard_limit": 32768,
+    "categories": {
+      "file": 10,
+      "socket": 15,
+      "pipe": 5,
+      "device": 3,
+      "anon_inode": 8,
+      "eventfd": 1
+    },
+    "fds": [
+      { "fd": 0, "target": "/dev/null", "type": "device" },
+      { "fd": 3, "target": "socket:[12345]", "type": "socket" }
+    ],
+    "truncated": false,
+    "full_access": true
+  },
+  "network": {
+    "tcp_count": 5,
+    "udp_count": 2,
+    "total_count": 7,
+    "tcp_connections": [
+      {
+        "protocol": "tcp",
+        "local_address": "10.0.2.15",
+        "local_port": 45678,
+        "remote_address": "142.250.185.206",
+        "remote_port": 443,
+        "state": "ESTABLISHED"
+      }
+    ],
+    "udp_connections": [
+      {
+        "protocol": "udp",
+        "local_address": "0.0.0.0",
+        "local_port": 68,
+        "remote_address": "0.0.0.0",
+        "remote_port": 0,
+        "state": "UNCONN"
+      }
+    ],
+    "state_summary": {
+      "ESTABLISHED": 3,
+      "LISTEN": 1,
+      "TIME_WAIT": 1
+    },
+    "truncated": false
+  },
+  "io": {
+    "rchar": 123456789,
+    "wchar": 987654321,
+    "syscr": 5000,
+    "syscw": 3000,
+    "read_bytes": 50000000,
+    "write_bytes": 30000000,
+    "cancelled_write_bytes": 0,
+    "available": true
+  },
+  "relationships": {
+    "parent_pid": 567,
+    "parent": {
+      "pid": 567,
+      "name": "zygote64",
+      "state": "S"
+    },
+    "children_count": 2,
+    "children": [
+      { "pid": 1300, "name": "WebViewLoader", "state": "S" }
+    ],
+    "tree_depth": 3,
+    "truncated": false
+  },
+  "permissions": {
+    "has_root": true,
+    "io_stats_available": true,
+    "detailed_memory_available": true,
+    "dumpsys_memory_available": true,
+    "full_fd_access": true
+  },
+  "_cache": {
+    "is_cached": false,
+    "age_seconds": 0.0
+  }
+}
+```
+
+**Permissions Object:**
+| Field | Meaning |
+|-------|---------|
+| `has_root` | Device has root access (su available) |
+| `io_stats_available` | `/proc/PID/io` was readable |
+| `detailed_memory_available` | `smaps_rollup` was readable (PSS/USS available) |
+| `dumpsys_memory_available` | `dumpsys meminfo` returned data (Android app) |
+| `full_fd_access` | All file descriptors were readable |
 
 #### Kill Process
 
@@ -794,8 +974,89 @@ Returns current session status for a device.
   "interval_ms": 2000,
   "client_count": 2
 }
+```
+
+### Process Overview Session Management
+
+Separate session management for the Process Overview panel, allowing independent polling control.
+
+#### Register Overview Session
+
+```
+POST /api/devices/{device_id}/overview/session/register
+```
+
+Registers a browser tab for Process Overview polling. First client becomes primary.
+
+**Request Body:**
+```json
+{
+  "client_id": "unique-tab-identifier",
+  "interval_ms": 5000
+}
+```
+
+**Response:**
+```json
+{
+  "is_primary": true,
+  "message": "Primary session established",
+  "active_interval_ms": 5000,
+  "client_id": "unique-tab-identifier"
+}
+```
+
+#### Unregister Overview Session
+
+```
+POST /api/devices/{device_id}/overview/session/unregister
+```
+
+Unregisters an Overview polling session when a tab closes.
+
+#### Get Overview Session Info
+
+```
+GET /api/devices/{device_id}/overview/session/info
+```
+
+Returns current Overview session status for a device.
+
+### Process Churn History
+
+#### Get Churn History
+
+```
+GET /api/devices/{device_id}/processes/churn/history
+```
+
+Retrieves detailed process spawn/kill event history.
 
 **Query Parameters:**
+- `limit` (optional): Maximum number of events to return (default: 500)
+
+**Response:**
+```json
+{
+  "events": [
+    {
+      "type": "spawn",
+      "pid": 1234,
+      "name": "com.example.app",
+      "timestamp": "2024-11-23T10:30:00.000Z"
+    },
+    {
+      "type": "kill",
+      "pid": 5678,
+      "name": "old.process",
+      "timestamp": "2024-11-23T10:29:55.000Z"
+    }
+  ],
+  "count": 2
+}
+```
+
+**Query Parameters (for /churn):**
 - `window` (optional): Time window in seconds (default: 60)
 
 **Response:**
@@ -1168,14 +1429,17 @@ The device details interface is organized into tabbed sections for clear separat
 - Kernel thread filtering with show/hide toggle (hidden by default)
 - Sort by PID, name, memory usage, or user (defaults to memory for identifying resource-heavy processes)
 - Paginated process table with 50 processes per page
-- Process inspection with detailed information:
-  - Command line arguments
-  - Process status (/proc/pid/status)
-  - Thread listing
-  - Open file descriptors
-  - Memory maps (first 50 entries)
-  - Per-process memory breakdown (RSS, VSZ, peak memory)
-  - Per-process TCP connections with local/remote addresses and states
+- Process Overview panel with comprehensive inspection:
+  - **Identity**: PID, PPID, name, state, UID/GID, thread count, nice value, priority, CPU time (utime/stime), running duration, full command line
+  - **Memory**: RSS, VSZ, peak, HWM, swap from /proc/PID/status; PSS, USS, private/shared clean/dirty from smaps_rollup; detailed heap breakdown (Java heap, native heap, code, stack, graphics) from dumpsys meminfo
+  - **Threads**: Thread count, list with TID, name, state, CPU time; main thread identification
+  - **Files**: Open FD count, soft/hard limits, categorized FD list (files, sockets, pipes, devices, anon_inode, eventfd)
+  - **Network**: TCP/UDP connections (IPv4/IPv6) with local/remote addresses, ports, and states; state summary counts
+  - **I/O Stats**: Read/write character counts (rchar/wchar), syscall counts (syscr/syscw), actual disk bytes, cancelled write bytes (requires root)
+  - **Relationships**: Parent process info, children list, tree depth to init
+  - **Permissions**: Indicates data availability based on root access and Android version
+- Process Overview caching with 5-second TTL to reduce ADB overhead
+- Separate polling session management for Overview panel (independent from process list polling)
 - Process termination with confirmation dialog
 - Android process state indicators via ActivityManager:
   - foreground (app on screen), visible (bound to foreground), service (foreground service)
@@ -1335,14 +1599,27 @@ epifania/
 │   │   └── processes_tab/        # Process monitoring module
 │   │       ├── __init__.py
 │   │       ├── routes.py         # Process API endpoints
-│   │       └── monitoring/       # Process monitoring logic
+│   │       ├── monitoring/       # Process monitoring logic
+│   │       │   ├── __init__.py
+│   │       │   ├── dprocess_monitor.py  # Process monitor class
+│   │       │   ├── cpu_monitor.py       # CPU usage monitoring
+│   │       │   ├── memory_monitor.py    # Memory usage monitoring
+│   │       │   ├── storage_monitor.py   # Storage monitoring
+│   │       │   ├── network_monitor.py   # Network monitoring
+│   │       │   └── cache.py             # Thread-safe metrics caching and session management
+│   │       └── overview/         # Process Overview inspection module
 │   │           ├── __init__.py
-│   │           ├── dprocess_monitor.py  # Process monitor class
-│   │           ├── cpu_monitor.py       # CPU usage monitoring
-│   │           ├── memory_monitor.py    # Memory usage monitoring
-│   │           ├── storage_monitor.py   # Storage monitoring
-│   │           ├── network_monitor.py   # Network monitoring
-│   │           └── cache.py             # Thread-safe metrics caching and session management
+│   │           ├── process_inspector.py # Orchestrator for all collectors
+│   │           ├── cache.py             # Overview caching and session management
+│   │           └── collectors/          # Modular data collectors
+│   │               ├── __init__.py
+│   │               ├── identity.py      # Process identity, scheduling, timing
+│   │               ├── memory.py        # PSS/USS, smaps_rollup, dumpsys meminfo
+│   │               ├── threads.py       # Thread list with names and states
+│   │               ├── files.py         # File descriptors, limits, categorization
+│   │               ├── network.py       # TCP/UDP connections for PID
+│   │               ├── io_stats.py      # I/O statistics (root-dependent)
+│   │               └── relationships.py # Parent/children process tree
 │   ├── monitoring/               # Health and process monitoring
 │   │   ├── __init__.py
 │   │   ├── health_manager.py     # Health check system
@@ -1387,17 +1664,26 @@ epifania/
 │   │   │       │   ├── ProcessesTab.vue
 │   │   │       │   ├── components/
 │   │   │       │   │   ├── ProcessControlBar.vue    # Search, filters, kernel toggle, Details modal
-│   │   │       │   │   ├── ProcessDetailsModal.vue
 │   │   │       │   │   ├── ProcessKillModal.vue
 │   │   │       │   │   ├── ProcessStatsBar.vue      # Runtime overview with CPU/Memory help modals
-│   │   │       │   │   └── ProcessTable.vue         # Process list with State Dictionary modal
+│   │   │       │   │   ├── ProcessTable.vue         # Process list with State Dictionary modal
+│   │   │       │   │   ├── ProcessOverviewPanel.vue # Process Overview container with controls
+│   │   │       │   │   ├── ProcessOverviewIdentity.vue
+│   │   │       │   │   ├── ProcessOverviewMemory.vue
+│   │   │       │   │   ├── ProcessOverviewThreads.vue
+│   │   │       │   │   ├── ProcessOverviewFiles.vue
+│   │   │       │   │   ├── ProcessOverviewNetwork.vue
+│   │   │       │   │   ├── ProcessOverviewIO.vue
+│   │   │       │   │   ├── ProcessOverviewRelationships.vue
+│   │   │       │   │   └── ProcessOverviewDetailModal.vue
 │   │   │       │   └── composables/
 │   │   │       │       ├── useProcessActions.js
 │   │   │       │       ├── useProcesses.js
 │   │   │       │       ├── useProcessFilters.js     # Includes kernel thread filtering
 │   │   │       │       ├── useProcessChurn.js
 │   │   │       │       ├── useSystemMetrics.js
-│   │   │       │       └── usePollingSession.js     # Multi-tab session management
+│   │   │       │       ├── usePollingSession.js     # Multi-tab session management
+│   │   │       │       └── useProcessOverview.js    # Process Overview state and session management
 │   │   │       ├── packages/     # Package management (placeholder)
 │   │   │       │   └── PackagesTab.vue
 │   │   │       ├── files/        # File browser (placeholder)
@@ -1464,6 +1750,10 @@ The backend follows a modular architecture with clear separation of concerns:
   - `backend/device/processes_tab/monitoring/storage_monitor.py`: Storage partition monitoring and usage statistics
   - `backend/device/processes_tab/monitoring/network_monitor.py`: Network throughput, connection tracking, and per-process TCP monitoring
   - `backend/device/processes_tab/monitoring/cache.py`: Thread-safe metrics caching (`MetricsCache`) and polling session management (`PollingSession`) for multi-tab consistency
+- `backend/device/processes_tab/overview/`: Process Overview inspection module
+  - `backend/device/processes_tab/overview/process_inspector.py`: Orchestrator that combines all collectors for comprehensive process data
+  - `backend/device/processes_tab/overview/cache.py`: Overview-specific caching with 5-second TTL and separate session management
+  - `backend/device/processes_tab/overview/collectors/`: Modular data collectors (identity, memory, threads, files, network, io_stats, relationships)
 - `backend/frida_mgmt/manage/`: Frida server management modules (discovery, permissions, server lifecycle)
 - `backend/monitoring/health_manager.py`: Health monitoring system with periodic checks
 - `backend/monitoring/process_manager.py`: Process cleanup and PID file management
@@ -1525,7 +1815,8 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - `frontend/src/composables/useToast.js`: Toast notification state management
 - `frontend/src/views/device/processes/composables/useProcesses.js`: Process fetching with auto-refresh and memory history tracking
 - `frontend/src/views/device/processes/composables/useProcessFilters.js`: Search, filter, sort, pagination, and kernel thread filtering logic
-- `frontend/src/views/device/processes/composables/useProcessActions.js`: Process inspection and termination actions
+- `frontend/src/views/device/processes/composables/useProcessActions.js`: Process termination actions
+- `frontend/src/views/device/processes/composables/useProcessOverview.js`: Process Overview state management with auto-refresh and session synchronization
 - `frontend/src/views/device/processes/composables/useProcessChurn.js`: Process spawn/kill event tracking
 - `frontend/src/views/device/processes/composables/useSystemMetrics.js`: System resource monitoring (CPU, memory, storage, network)
 - `frontend/src/views/device/processes/composables/usePollingSession.js`: Multi-tab session management with primary/secondary role tracking
@@ -1533,8 +1824,16 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 **Process Tab Components:**
 - `ProcessControlBar.vue`: Search, filter, sort controls with kernel thread toggle and Details help modal
 - `ProcessStatsBar.vue`: Runtime overview with CPU/Memory/Storage/Network widgets and educational help modals
-- `ProcessTable.vue`: Process list with State Dictionary modal and memory delta indicators
-- `ProcessDetailsModal.vue`: Detailed process inspection view
+- `ProcessTable.vue`: Process list with State Dictionary modal and memory delta indicators; click row to open Overview panel
+- `ProcessOverviewPanel.vue`: Container for Process Overview with auto-refresh controls and session management
+- `ProcessOverviewIdentity.vue`: Process identity display (PID, name, state, timing, scheduling)
+- `ProcessOverviewMemory.vue`: Memory metrics display (RSS, VSZ, PSS, USS, dumpsys breakdown)
+- `ProcessOverviewThreads.vue`: Thread list with state and CPU time
+- `ProcessOverviewFiles.vue`: File descriptor list with categorization
+- `ProcessOverviewNetwork.vue`: TCP/UDP connections with state summary
+- `ProcessOverviewIO.vue`: I/O statistics display
+- `ProcessOverviewRelationships.vue`: Parent/children process tree with navigation
+- `ProcessOverviewDetailModal.vue`: Expandable detail modal for large data sets
 - `ProcessKillModal.vue`: Process termination confirmation dialog
 
 **Technical Implementation:**
@@ -1558,6 +1857,10 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - Android process state integration via ActivityManager for accurate state classification
 - Multi-tab consistency: Server-side caching ensures all browser tabs see identical metrics
 - Session management: Primary tab controls polling interval; secondary tabs show "Secondary" badge with disabled interval controls
+- Process Overview panel: Slide-in panel replaces modal for process inspection, integrated into Processes tab layout
+- Process Overview caching: 5-second TTL reduces ADB overhead; secondary tabs read from cache only
+- Modular collector architecture: Each data type (identity, memory, threads, files, network, I/O, relationships) has its own collector class
+- Graceful degradation: Overview panel indicates data availability based on root access and Android version
 
 ### Dependency Management
 
@@ -1686,6 +1989,14 @@ The test suites provide comprehensive validation that all core components functi
 - Verify device has proper root access for detailed metrics
 - Check network tab in browser developer tools for failed API requests
 - Ensure device is not in deep sleep or power saving mode
+
+**Process Overview Not Loading:**
+- Click on a process row in the table to open the Overview panel
+- If "Process not found" error appears, the process may have terminated
+- Some data (I/O stats, detailed memory) requires root access
+- PSS/USS metrics require Android 9+ (API 28) for smaps_rollup support
+- dumpsys meminfo only works for Android app processes, not native daemons
+- Check the "permissions" section in the Overview panel to see what data is available
 
 **Logs Not Streaming:**
 - Most debug logs (ADB Operations, Frida Install, Frida Server) auto-start on page load

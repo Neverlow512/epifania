@@ -19,6 +19,7 @@ class CPUMonitor:
     
     def get_cpu_stats(self, device_serial: str, top_n: int = 5) -> Dict:
         # Use cache to prevent race conditions from concurrent requests
+        # TTL is determined dynamically by the polling session interval
         cache_key = f"cpu:{device_serial}:{top_n}"
         
         def compute():
@@ -37,7 +38,7 @@ class CPUMonitor:
                     "top_consumers": []
                 }
         
-        return device_metrics_cache.get_or_compute(cache_key, compute, ttl=1.5)
+        return device_metrics_cache.get_or_compute(cache_key, compute)
     
     def _get_overall_cpu(self, device_serial: str) -> float:
         try:

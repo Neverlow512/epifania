@@ -3,6 +3,7 @@
 from typing import Dict, Optional
 from core.logger import get_logger
 from core.adb_manager import ADBManager
+from device.processes_tab.monitoring.cache import device_metrics_cache
 
 logger = get_logger(__name__, "device")
 
@@ -13,35 +14,40 @@ class MemoryMonitor:
         logger.info("MemoryMonitor initialized")
     
     def get_memory_stats(self, device_serial: str, focused_pid: Optional[int] = None) -> Dict:
-        try:
-            system_memory = self._get_system_memory(device_serial)
-            
-            result = {
-                "total_mb": system_memory.get("total_mb", 0),
-                "used_mb": system_memory.get("used_mb", 0),
-                "free_mb": system_memory.get("free_mb", 0),
-                "available_mb": system_memory.get("available_mb", 0),
-                "buffers_mb": system_memory.get("buffers_mb", 0),
-                "cached_mb": system_memory.get("cached_mb", 0)
-            }
-            
-            if focused_pid:
-                focused = self._get_process_memory(device_serial, focused_pid)
-                if focused:
-                    result["focused_process"] = focused
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"Failed to get memory stats for {device_serial}: {str(e)}")
-            return {
-                "total_mb": 0,
-                "used_mb": 0,
-                "free_mb": 0,
-                "available_mb": 0,
-                "buffers_mb": 0,
-                "cached_mb": 0
-            }
+        cache_key = f"memory:{device_serial}:{focused_pid or 'none'}"
+        
+        def compute():
+            try:
+                system_memory = self._get_system_memory(device_serial)
+                
+                result = {
+                    "total_mb": system_memory.get("total_mb", 0),
+                    "used_mb": system_memory.get("used_mb", 0),
+                    "free_mb": system_memory.get("free_mb", 0),
+                    "available_mb": system_memory.get("available_mb", 0),
+                    "buffers_mb": system_memory.get("buffers_mb", 0),
+                    "cached_mb": system_memory.get("cached_mb", 0)
+                }
+                
+                if focused_pid:
+                    focused = self._get_process_memory(device_serial, focused_pid)
+                    if focused:
+                        result["focused_process"] = focused
+                
+                return result
+                
+            except Exception as e:
+                logger.error(f"Failed to get memory stats for {device_serial}: {str(e)}")
+                return {
+                    "total_mb": 0,
+                    "used_mb": 0,
+                    "free_mb": 0,
+                    "available_mb": 0,
+                    "buffers_mb": 0,
+                    "cached_mb": 0
+                }
+        
+        return device_metrics_cache.get_or_compute(cache_key, compute)
     
     def _get_system_memory(self, device_serial: str) -> Dict:
         try:

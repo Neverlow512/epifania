@@ -52,6 +52,7 @@
               :lastUpdate="overviewLastUpdate"
               :isCached="overviewIsCached"
               :isPrimary="overviewIsPrimary"
+              :sessionRegistered="overviewSessionRegistered"
               @inspect-process="handleInspectProcess"
               @kill-process="handleKillProcess"
               @close="handleCloseOverview"
@@ -212,6 +213,7 @@ export default {
       autoRefresh: overviewAutoRefresh,
       refreshInterval: overviewRefreshInterval,
       isPrimary: overviewIsPrimary,
+      sessionRegistered: overviewSessionRegistered,
       toggleOverview,
       inspectProcess,
       closeOverview,
@@ -307,6 +309,7 @@ export default {
       overviewAutoRefresh,
       overviewRefreshInterval,
       overviewIsPrimary,
+      overviewSessionRegistered,
       handleRefresh,
       loadNetworkConnections,
       handleToggleOverview,

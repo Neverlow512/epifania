@@ -3,7 +3,16 @@
     <div class="card-body p-4 space-y-4">
       <div class="flex items-center justify-between gap-2">
         <div class="min-w-0 flex-1">
-          <h3 class="text-sm font-semibold text-white">Process Overview</h3>
+          <div class="flex items-center gap-2">
+            <h3 class="text-sm font-semibold text-white">Process Overview</h3>
+            <span 
+              v-if="!isPrimary && sessionRegistered" 
+              class="badge badge-xs badge-ghost text-slate-500"
+              title="This tab is synced with the primary tab's refresh interval"
+            >
+              secondary
+            </span>
+          </div>
           <p v-if="data?.identity" class="text-xs text-slate-500 truncate">
             PID <span class="text-primary">{{ data.identity.pid }}</span> - {{ data.identity.name }}
           </p>
@@ -34,7 +43,7 @@
         </div>
       </div>
 
-      <div class="flex items-center justify-between gap-2 py-1 px-2 bg-black/30 rounded-lg border border-neutral-800">
+      <div class="flex items-center justify-between gap-2 py-1.5 px-2 bg-black/30 rounded-lg border border-neutral-800">
         <div class="flex items-center gap-2">
           <button
             type="button"
@@ -48,20 +57,30 @@
             </svg>
             {{ autoRefresh ? 'Pause' : 'Auto' }}
           </button>
-          <select
-            class="select select-xs select-bordered bg-neutral-900 border-neutral-700 text-slate-300 w-20"
-            :value="refreshInterval"
-            :disabled="!isPrimary && autoRefresh"
-            @change="$emit('update-refresh-interval', Number($event.target.value))"
-          >
-            <option :value="2000">2s</option>
-            <option :value="5000">5s</option>
-            <option :value="10000">10s</option>
-            <option :value="30000">30s</option>
-          </select>
+          <div class="relative">
+            <select
+              class="select select-xs select-bordered bg-neutral-900 border-neutral-700 text-slate-300 w-20"
+              :class="{ 'opacity-60 cursor-not-allowed': !isPrimary && sessionRegistered }"
+              :value="refreshInterval"
+              :disabled="!isPrimary && sessionRegistered"
+              :title="!isPrimary && sessionRegistered ? 'Only the primary tab can change the interval' : 'Refresh interval'"
+              @change="$emit('update-refresh-interval', Number($event.target.value))"
+            >
+              <option :value="2000">2s</option>
+              <option :value="5000">5s</option>
+              <option :value="10000">10s</option>
+              <option :value="30000">30s</option>
+            </select>
+          </div>
         </div>
         <div class="flex items-center gap-2 text-[10px] text-slate-500">
-          <span v-if="isCached" class="flex items-center gap-1 text-amber-400">
+          <span v-if="!isPrimary && sessionRegistered && autoRefresh" class="flex items-center gap-1 text-sky-400">
+            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            synced
+          </span>
+          <span v-else-if="isCached" class="flex items-center gap-1 text-amber-400">
             <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -129,12 +148,25 @@
               </svg>
               No root
             </div>
-            <div v-if="!isPrimary && autoRefresh" class="flex items-center gap-1 text-slate-500">
+            <div 
+              v-if="isPrimary && autoRefresh" 
+              class="flex items-center gap-1 text-emerald-400"
+              title="This tab controls the refresh interval for all tabs"
+            >
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
               </svg>
-              Synced
+              primary
+            </div>
+            <div 
+              v-else-if="!isPrimary && autoRefresh && sessionRegistered" 
+              class="flex items-center gap-1 text-sky-400"
+              title="Synced with primary tab - reading from cache"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+              synced
             </div>
           </div>
 
@@ -206,6 +238,10 @@ export default {
     isPrimary: {
       type: Boolean,
       default: true
+    },
+    sessionRegistered: {
+      type: Boolean,
+      default: false
     }
   },
   emits: [

@@ -3,6 +3,7 @@
 from typing import Dict, List
 from core.logger import get_logger
 from core.adb_manager import ADBManager
+from device.processes_tab.monitoring.cache import device_metrics_cache
 
 logger = get_logger(__name__, "device")
 
@@ -13,20 +14,33 @@ class StorageMonitor:
         logger.info("StorageMonitor initialized")
     
     def get_storage_stats(self, device_serial: str, partition: str = "/data") -> Dict:
-        try:
-            result = self._get_partition_info(device_serial, partition)
-            return result
-        except Exception as e:
-            logger.error(f"Failed to get storage stats for {device_serial}: {str(e)}")
-            return {
-                "partition": partition,
-                "total_gb": 0.0,
-                "used_gb": 0.0,
-                "free_gb": 0.0,
-                "percent_used": 0.0
-            }
+        cache_key = f"storage:{device_serial}:{partition}"
+        
+        def compute():
+            try:
+                result = self._get_partition_info(device_serial, partition)
+                return result
+            except Exception as e:
+                logger.error(f"Failed to get storage stats for {device_serial}: {str(e)}")
+                return {
+                    "partition": partition,
+                    "total_gb": 0.0,
+                    "used_gb": 0.0,
+                    "free_gb": 0.0,
+                    "percent_used": 0.0
+                }
+        
+        return device_metrics_cache.get_or_compute(cache_key, compute)
     
     def get_all_partitions(self, device_serial: str) -> List[Dict]:
+        cache_key = f"storage_all:{device_serial}"
+        
+        def compute():
+            return self._get_all_partitions_impl(device_serial)
+        
+        return device_metrics_cache.get_or_compute(cache_key, compute)
+    
+    def _get_all_partitions_impl(self, device_serial: str) -> List[Dict]:
         try:
             result = self.adb_manager.execute_shell(
                 device_serial,

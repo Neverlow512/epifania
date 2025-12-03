@@ -1,5 +1,6 @@
 // Process overview state management - fetch and display detailed process info
 // Supports auto-refresh with tab synchronization via backend session management
+// Secondary tabs read from cache only, controlled by primary tab's interval
 
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import axios from 'axios'
@@ -30,6 +31,7 @@ export function useProcessOverview(deviceSerial) {
   const clientId = ref(generateClientId())
   const isPrimary = ref(false)
   const sessionRegistered = ref(false)
+  const sessionMessage = ref('')
 
   async function registerSession(intervalMs) {
     try {
@@ -43,17 +45,15 @@ export function useProcessOverview(deviceSerial) {
       
       isPrimary.value = response.data.is_primary
       refreshInterval.value = response.data.active_interval_ms
+      sessionMessage.value = response.data.message
       sessionRegistered.value = true
-      
-      if (!response.data.is_primary && intervalMs !== response.data.active_interval_ms) {
-        toast.warning(response.data.message, ERROR_KEY_SESSION)
-      }
       
       toast.clearError(ERROR_KEY_SESSION)
       return response.data
       
     } catch (err) {
       console.error('Failed to register overview session:', err)
+      sessionMessage.value = 'Failed to register session'
       return null
     }
   }
@@ -80,7 +80,9 @@ export function useProcessOverview(deviceSerial) {
     
     try {
       const url = `http://localhost:8000/api/devices/${deviceSerial}/processes/${pid}/overview`
-      const params = forceRefresh ? { force_refresh: true } : {}
+      // Secondary tabs should never force refresh - they read from cache only
+      const shouldForceRefresh = forceRefresh && isPrimary.value
+      const params = shouldForceRefresh ? { force_refresh: true } : {}
       
       const response = await axios.get(url, { params })
       overviewData.value = response.data
@@ -113,7 +115,8 @@ export function useProcessOverview(deviceSerial) {
 
   async function forceRefreshOverview() {
     if (expandedPid.value) {
-      await fetchOverview(expandedPid.value, true)
+      // Only primary tab can force refresh
+      await fetchOverview(expandedPid.value, isPrimary.value)
     }
   }
 
@@ -146,6 +149,7 @@ export function useProcessOverview(deviceSerial) {
     stopAutoRefresh()
     if (!autoRefresh.value || !expandedPid.value) return
     
+    // Both primary and secondary tabs poll, but secondary tabs only read from cache
     refreshTimer = setInterval(() => {
       if (expandedPid.value) {
         refreshOverview()
@@ -164,25 +168,31 @@ export function useProcessOverview(deviceSerial) {
     autoRefresh.value = !autoRefresh.value
     
     if (autoRefresh.value) {
-      if (!sessionRegistered.value) {
-        await registerSession(refreshInterval.value)
+      // Register session to get the active interval from primary
+      const result = await registerSession(refreshInterval.value)
+      if (result) {
+        startAutoRefresh()
       }
-      startAutoRefresh()
     } else {
       stopAutoRefresh()
     }
   }
 
   async function setRefreshInterval(newIntervalMs) {
+    // Only primary tab can change the interval
+    if (!isPrimary.value && sessionRegistered.value) {
+      toast.warning('Only the primary tab can change the refresh interval', ERROR_KEY_SESSION)
+      return false
+    }
+    
     const result = await registerSession(newIntervalMs)
     
     if (!result) {
-      toast.error('Failed to update overview refresh interval')
+      toast.error('Failed to update overview refresh interval', ERROR_KEY_SESSION)
       return false
     }
     
     if (!result.is_primary && newIntervalMs !== result.active_interval_ms) {
-      toast.warning(result.message)
       refreshInterval.value = result.active_interval_ms
     } else {
       refreshInterval.value = result.active_interval_ms
@@ -203,27 +213,31 @@ export function useProcessOverview(deviceSerial) {
     }
   })
 
-  onMounted(async () => {
-    if (autoRefresh.value) {
-      await registerSession(refreshInterval.value)
+  const handleBeforeUnload = () => {
+    if (sessionRegistered.value) {
+      const data = JSON.stringify({ client_id: clientId.value, interval_ms: refreshInterval.value })
+      // Use text/plain MIME type - application/json is not CORS-safelisted and may fail silently
+      const blob = new Blob([data], { type: 'text/plain' })
+      navigator.sendBeacon(
+        `http://localhost:8000/api/devices/${deviceSerial}/overview/session/unregister`,
+        blob
+      )
+    }
+  }
+
+  onMounted(() => {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', handleBeforeUnload)
     }
   })
 
   onUnmounted(async () => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
     stopAutoRefresh()
     await unregisterSession()
   })
-
-  if (typeof window !== 'undefined') {
-    window.addEventListener('beforeunload', () => {
-      if (sessionRegistered.value) {
-        navigator.sendBeacon(
-          `http://localhost:8000/api/devices/${deviceSerial}/overview/session/unregister`,
-          JSON.stringify({ client_id: clientId.value, interval_ms: refreshInterval.value })
-        )
-      }
-    })
-  }
 
   return {
     expandedPid,
@@ -237,6 +251,7 @@ export function useProcessOverview(deviceSerial) {
     refreshInterval,
     isPrimary,
     sessionRegistered,
+    sessionMessage,
     toggleOverview,
     closeOverview,
     inspectProcess,

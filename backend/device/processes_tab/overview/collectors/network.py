@@ -280,13 +280,33 @@ class NetworkCollector:
             groups = []
             for i in range(0, 32, 8):
                 word = ip_hex[i:i + 8]
-                # Reverse byte order within word
+                # Reverse byte order within word (little-endian to big-endian)
                 reversed_word = word[6:8] + word[4:6] + word[2:4] + word[0:2]
                 groups.append(reversed_word[0:4])
                 groups.append(reversed_word[4:8])
 
-            # Format as IPv6, removing leading zeros
+            # Check for IPv4-mapped IPv6 address (::ffff:x.x.x.x)
+            # Format: first 5 groups are 0, 6th group is ffff, last 2 groups are IPv4
+            if (groups[0] == "0000" and groups[1] == "0000" and
+                groups[2] == "0000" and groups[3] == "0000" and
+                groups[4] == "0000" and groups[5].lower() == "ffff"):
+                # Extract IPv4 from last two groups
+                ipv4_high = int(groups[6], 16)
+                ipv4_low = int(groups[7], 16)
+                ipv4 = f"{(ipv4_high >> 8) & 0xFF}.{ipv4_high & 0xFF}.{(ipv4_low >> 8) & 0xFF}.{ipv4_low & 0xFF}"
+                return ipv4
+
+            # Format as standard IPv6, removing leading zeros
             formatted = ":".join(g.lstrip("0") or "0" for g in groups)
+            
+            # Compress consecutive zero groups (simple compression)
+            formatted = formatted.replace(":0:0:0:0:0:0:0:", "::")
+            formatted = formatted.replace(":0:0:0:0:0:0:", "::")
+            formatted = formatted.replace(":0:0:0:0:0:", "::")
+            formatted = formatted.replace(":0:0:0:0:", "::")
+            formatted = formatted.replace(":0:0:0:", "::")
+            formatted = formatted.replace(":0:0:", "::")
+            
             return formatted
         except (ValueError, IndexError):
             return f"ipv6:{ip_hex[:16]}..."

@@ -42,13 +42,13 @@ class PollingSession:
                 logger.info(f"New primary session for {device_id}: client={client_id}, interval={interval_ms}ms")
                 return True, "Primary session established", interval_ms
             
-            # Update last seen for existing client
+            # Update last seen for all clients to keep session alive
             session["clients"][client_id] = current_time
+            session["last_seen"] = current_time
             
             if session["primary_client"] == client_id:
                 # Primary client updating interval
                 session["interval_ms"] = interval_ms
-                session["last_seen"] = current_time
                 return True, "Interval updated", interval_ms
             
             # Secondary client - cannot change interval
@@ -139,13 +139,43 @@ class MetricsCache:
             return explicit_ttl
         
         # Try to get TTL from polling session based on device_id in key
+        # Key format: "metric_type:device_serial:extra_params..."
+        # Device serial formats: "emulator-5554" (no colon) or "127.0.0.1:5555" (IP:port)
         if self._polling_session:
             parts = key.split(":")
             if len(parts) >= 2:
-                device_id = parts[1]
-                return self._polling_session.get_ttl(device_id)
+                device_id = self._extract_device_id(parts)
+                if device_id:
+                    return self._polling_session.get_ttl(device_id)
         
         return self._default_ttl
+    
+    def _extract_device_id(self, parts: list) -> Optional[str]:
+        # parts[0] = metric_type, parts[1] = device_serial (or IP), parts[2+] = extra params or port
+        # IP:port format: parts[1] looks like IP, parts[2] is numeric port (4-5 digits)
+        if len(parts) < 2:
+            return None
+        
+        if len(parts) >= 3:
+            # Check if parts[1] looks like an IP and parts[2] is a valid ADB port
+            potential_ip = parts[1]
+            potential_port = parts[2]
+            
+            is_ip_like = (
+                potential_ip.replace(".", "").isdigit() and
+                potential_ip.count(".") == 3
+            )
+            is_adb_port = (
+                potential_port.isdigit() and
+                len(potential_port) in (4, 5) and
+                potential_port.startswith("5")
+            )
+            
+            if is_ip_like and is_adb_port:
+                return f"{potential_ip}:{potential_port}"
+        
+        # Simple device serial (no colon in serial itself)
+        return parts[1]
     
     def get_or_compute(
         self,
@@ -198,6 +228,8 @@ class MetricsCache:
 
 
 # Singleton instances
-polling_session = PollingSession(session_timeout=10.0)
+# Session timeout should be longer than the longest expected polling interval
+# to survive missed heartbeats, but short enough to detect closed tabs
+polling_session = PollingSession(session_timeout=15.0)
 device_metrics_cache = MetricsCache(default_ttl=1.5, polling_session=polling_session)
 

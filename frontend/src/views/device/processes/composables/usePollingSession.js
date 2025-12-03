@@ -1,5 +1,6 @@
 // Manages polling session registration with the backend
 // Ensures only one tab controls the polling interval per device
+// Sends heartbeats on each poll to maintain session
 
 import { ref, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
@@ -29,12 +30,14 @@ export function usePollingSession(deviceSerial) {
         }
       )
       
+      const wasPrimary = isPrimary.value
       isPrimary.value = response.data.is_primary
       activeIntervalMs.value = response.data.active_interval_ms
       sessionMessage.value = response.data.message
       sessionRegistered.value = true
       
-      if (!response.data.is_primary && intervalMs !== response.data.active_interval_ms) {
+      // Only show warning on initial registration or status change, not on heartbeats
+      if (!wasPrimary && !response.data.is_primary && intervalMs !== response.data.active_interval_ms) {
         toast.warning(response.data.message, ERROR_KEY_SESSION)
       }
       
@@ -46,6 +49,12 @@ export function usePollingSession(deviceSerial) {
       toast.error('Failed to register polling session', ERROR_KEY_SESSION)
       return null
     }
+  }
+
+  // Heartbeat: re-register with current interval to keep session alive
+  const heartbeat = async () => {
+    if (!sessionRegistered.value) return
+    await registerSession(activeIntervalMs.value)
   }
 
   const updateInterval = async (intervalMs) => {
@@ -83,25 +92,31 @@ export function usePollingSession(deviceSerial) {
     }
   }
 
+  const handleBeforeUnload = () => {
+    if (sessionRegistered.value) {
+      const data = JSON.stringify({ client_id: clientId.value, interval_ms: activeIntervalMs.value })
+      // Use text/plain MIME type - application/json is not CORS-safelisted and may fail silently
+      const blob = new Blob([data], { type: 'text/plain' })
+      navigator.sendBeacon(
+        `http://localhost:8000/api/devices/${deviceSerial}/session/unregister`,
+        blob
+      )
+    }
+  }
+
   onMounted(async () => {
     await registerSession(activeIntervalMs.value)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', handleBeforeUnload)
+    }
   })
 
   onUnmounted(async () => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
     await unregisterSession()
   })
-
-  // Handle page unload
-  if (typeof window !== 'undefined') {
-    window.addEventListener('beforeunload', () => {
-      if (sessionRegistered.value) {
-        navigator.sendBeacon(
-          `http://localhost:8000/api/devices/${deviceSerial}/session/unregister`,
-          JSON.stringify({ client_id: clientId.value, interval_ms: activeIntervalMs.value })
-        )
-      }
-    })
-  }
 
   return {
     clientId,
@@ -111,7 +126,8 @@ export function usePollingSession(deviceSerial) {
     sessionRegistered,
     registerSession,
     updateInterval,
-    unregisterSession
+    unregisterSession,
+    heartbeat
   }
 }
 

@@ -13,8 +13,10 @@ class IOStatsCollector:
 
     def collect(self, device_serial: str, pid: int, has_root: bool = False) -> Optional[Dict]:
         try:
-            io_data = self._get_io_stats(device_serial, pid, has_root)
+            io_data, error_reason = self._get_io_stats(device_serial, pid, has_root)
             if not io_data:
+                if error_reason:
+                    return {"available": False, "error": error_reason}
                 return None
 
             return {
@@ -32,23 +34,39 @@ class IOStatsCollector:
             logger.error(f"Failed to collect I/O stats for PID {pid}: {str(e)}")
             return None
 
-    def _get_io_stats(self, device_serial: str, pid: int, has_root: bool) -> Optional[Dict]:
+    def _get_io_stats(self, device_serial: str, pid: int, has_root: bool) -> tuple:
+        # First check if the io file exists at all (kernel support)
+        check_cmd = f"ls /proc/{pid}/io 2>&1"
+        check_result = self.adb_manager.execute_shell(device_serial, check_cmd)
+        
+        if check_result and "No such file" in check_result:
+            # Kernel doesn't have CONFIG_TASK_IO_ACCOUNTING enabled
+            return None, "kernel_not_supported"
+
+        # Try with su first if we believe we have root
         if has_root:
-            cmd = f"su -c 'cat /proc/{pid}/io' 2>/dev/null"
+            cmd = f"su -c 'cat /proc/{pid}/io' 2>&1"
         else:
-            cmd = f"cat /proc/{pid}/io 2>/dev/null"
+            cmd = f"cat /proc/{pid}/io 2>&1"
 
         result = self.adb_manager.execute_shell(device_serial, cmd)
 
-        if not result or "Permission denied" in result or not result.strip():
-            # Try with su if initial attempt failed and we have root
-            if has_root and "Permission denied" in (result or ""):
-                result = self.adb_manager.execute_shell(
-                    device_serial,
-                    f"su -c 'cat /proc/{pid}/io 2>/dev/null'"
-                )
-            if not result or "Permission denied" in result or not result.strip():
-                return None
+        # Check for permission denied
+        if result and "Permission denied" in result:
+            # Try with su as fallback
+            result = self.adb_manager.execute_shell(
+                device_serial,
+                f"su -c 'cat /proc/{pid}/io' 2>&1"
+            )
+            if not result or "Permission denied" in result:
+                return None, "permission_denied"
+
+        # Check for file not found (process may have died or kernel doesn't support)
+        if result and "No such file" in result:
+            return None, "kernel_not_supported"
+
+        if not result or not result.strip():
+            return None, "unknown"
 
         data = {}
         for line in result.strip().split("\n"):
@@ -64,5 +82,5 @@ class IOStatsCollector:
             except ValueError:
                 continue
 
-        return data if data else None
+        return (data, None) if data else (None, "parse_error")
 
