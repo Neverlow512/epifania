@@ -3,6 +3,7 @@
 from typing import Dict, Optional
 from core.logger import get_logger
 from core.adb_manager import ADBManager
+from device.contexts import InspectionContext
 from device.processes_tab.overview.collectors.identity import IdentityCollector
 from device.processes_tab.overview.collectors.memory import MemoryCollector
 from device.processes_tab.overview.collectors.threads import ThreadsCollector
@@ -17,30 +18,32 @@ logger = get_logger(__name__, "device")
 class ProcessInspector:
     def __init__(self, adb_manager: ADBManager):
         self.adb_manager = adb_manager
-        self.identity_collector = IdentityCollector(adb_manager)
-        self.memory_collector = MemoryCollector(adb_manager)
-        self.threads_collector = ThreadsCollector(adb_manager)
-        self.files_collector = FilesCollector(adb_manager)
-        self.network_collector = NetworkCollector(adb_manager)
-        self.io_collector = IOStatsCollector(adb_manager)
-        self.relationships_collector = RelationshipsCollector(adb_manager)
+        self.identity_collector = IdentityCollector()
+        self.memory_collector = MemoryCollector()
+        self.threads_collector = ThreadsCollector()
+        self.files_collector = FilesCollector()
+        self.network_collector = NetworkCollector()
+        self.io_collector = IOStatsCollector()
+        self.relationships_collector = RelationshipsCollector()
         logger.info("ProcessInspector initialized")
 
     def inspect(self, device_serial: str, pid: int, has_root: bool = False) -> Optional[Dict]:
         try:
             logger.info(f"[ADB INSPECTION START] Process {pid} on {device_serial} (root: {has_root})")
 
-            identity = self.identity_collector.collect(device_serial, pid)
+            ctx = InspectionContext(self.adb_manager, device_serial, pid, has_root)
+
+            identity = self.identity_collector.collect(ctx)
             if not identity:
                 logger.warning(f"Process {pid} not found or inaccessible")
                 return None
 
-            memory = self.memory_collector.collect(device_serial, pid)
-            threads = self.threads_collector.collect(device_serial, pid)
-            files = self.files_collector.collect(device_serial, pid, has_root)
-            network = self.network_collector.collect(device_serial, pid)
-            io_stats = self.io_collector.collect(device_serial, pid, has_root)
-            relationships = self.relationships_collector.collect(device_serial, pid)
+            memory = self.memory_collector.collect(ctx)
+            threads = self.threads_collector.collect(ctx)
+            files = self.files_collector.collect(ctx)
+            network = self.network_collector.collect(ctx)
+            io_stats = self.io_collector.collect(ctx)
+            relationships = self.relationships_collector.collect(ctx)
             
             logger.info(f"[ADB INSPECTION COMPLETE] Process {pid} - collected all data")
 

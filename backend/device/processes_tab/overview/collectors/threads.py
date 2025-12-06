@@ -2,7 +2,7 @@
 
 from typing import Dict, List, Optional
 from core.logger import get_logger
-from core.adb_manager import ADBManager
+from device.contexts import InspectionContext
 
 logger = get_logger(__name__, "device")
 
@@ -23,56 +23,52 @@ THREAD_STATE_MAP = {
 
 
 class ThreadsCollector:
-    def __init__(self, adb_manager: ADBManager):
-        self.adb_manager = adb_manager
-
-    def collect(self, device_serial: str, pid: int) -> Optional[Dict]:
+    def collect(self, ctx: InspectionContext) -> Optional[Dict]:
         try:
-            thread_ids = self._get_thread_ids(device_serial, pid)
+            thread_ids = self._get_thread_ids(ctx)
             if thread_ids is None:
                 return None
 
             threads = []
             for tid in thread_ids:
-                thread_info = self._get_thread_info(device_serial, pid, tid)
+                thread_info = self._get_thread_info(ctx, tid)
                 if thread_info:
                     threads.append(thread_info)
 
             threads.sort(key=lambda t: t["tid"])
 
-            main_thread = next((t for t in threads if t["tid"] == pid), None)
+            main_thread = next((t for t in threads if t["tid"] == ctx.pid), None)
 
             return {
                 "count": len(threads),
                 "threads": threads,
-                "main_thread_tid": pid if main_thread else None,
+                "main_thread_tid": ctx.pid if main_thread else None,
             }
 
         except Exception as e:
-            logger.error(f"Failed to collect threads for PID {pid}: {str(e)}")
+            logger.error(f"Failed to collect threads for PID {ctx.pid}: {str(e)}")
             return None
 
-    def _get_thread_ids(self, device_serial: str, pid: int) -> Optional[List[int]]:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            f"ls /proc/{pid}/task 2>/dev/null"
-        )
+    def _get_thread_ids(self, ctx: InspectionContext) -> Optional[List[int]]:
+        result = ctx.list_directory(f"/proc/{ctx.pid}/task")
         if not result or "No such file" in result:
             return None
 
         tids = []
-        for tid_str in result.strip().split():
-            try:
-                tids.append(int(tid_str))
-            except ValueError:
-                continue
+        for line in result.strip().split("\n"):
+            parts = line.split()
+            if parts:
+                tid_str = parts[-1]
+                try:
+                    tids.append(int(tid_str))
+                except ValueError:
+                    continue
         return tids
 
-    def _get_thread_info(self, device_serial: str, pid: int, tid: int) -> Optional[Dict]:
-        # Batch fetch comm and stat in one command for efficiency
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            f"cat /proc/{pid}/task/{tid}/comm 2>/dev/null; echo '---SEPARATOR---'; cat /proc/{pid}/task/{tid}/stat 2>/dev/null"
+    def _get_thread_info(self, ctx: InspectionContext, tid: int) -> Optional[Dict]:
+        result = ctx.execute_command(
+            f"cat /proc/{ctx.pid}/task/{tid}/comm 2>/dev/null; echo '---SEPARATOR---'; cat /proc/{ctx.pid}/task/{tid}/stat 2>/dev/null",
+            cache_key=f"thread_{tid}"
         )
         if not result:
             return {"tid": tid, "name": "", "state": "unknown", "state_char": ""}
@@ -106,6 +102,6 @@ class ThreadsCollector:
             "utime_ticks": utime,
             "stime_ticks": stime,
             "cpu_time_ticks": utime + stime,
-            "is_main": tid == pid,
+            "is_main": tid == ctx.pid,
         }
 

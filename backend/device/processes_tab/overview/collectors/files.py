@@ -2,19 +2,16 @@
 
 from typing import Dict, List, Optional
 from core.logger import get_logger
-from core.adb_manager import ADBManager
+from device.contexts import InspectionContext
 
 logger = get_logger(__name__, "device")
 
 
 class FilesCollector:
-    def __init__(self, adb_manager: ADBManager):
-        self.adb_manager = adb_manager
-
-    def collect(self, device_serial: str, pid: int, has_root: bool = False) -> Optional[Dict]:
+    def collect(self, ctx: InspectionContext) -> Optional[Dict]:
         try:
-            fds = self._get_file_descriptors(device_serial, pid, has_root)
-            limits = self._get_fd_limits(device_serial, pid)
+            fds = self._get_file_descriptors(ctx)
+            limits = self._get_fd_limits(ctx)
 
             categorized = self._categorize_fds(fds)
 
@@ -25,20 +22,15 @@ class FilesCollector:
                 "hard_limit": limits.get("hard_limit"),
                 "categories": categorized,
                 "fds": fds,
-                "full_access": has_root or self._check_fd_access(device_serial, pid),
+                "full_access": ctx.has_root or self._check_fd_access(ctx),
             }
 
         except Exception as e:
-            logger.error(f"Failed to collect files for PID {pid}: {str(e)}")
+            logger.error(f"Failed to collect files for PID {ctx.pid}: {str(e)}")
             return None
 
-    def _get_file_descriptors(self, device_serial: str, pid: int, has_root: bool) -> List[Dict]:
-        if has_root:
-            cmd = f"su -c 'ls -la /proc/{pid}/fd 2>/dev/null'"
-        else:
-            cmd = f"ls -la /proc/{pid}/fd 2>/dev/null"
-
-        result = self.adb_manager.execute_shell(device_serial, cmd)
+    def _get_file_descriptors(self, ctx: InspectionContext) -> List[Dict]:
+        result = ctx.list_directory(f"/proc/{ctx.pid}/fd", use_root=ctx.has_root)
         if not result:
             return []
 
@@ -111,43 +103,41 @@ class FilesCollector:
             categories[fd_type] = categories.get(fd_type, 0) + 1
         return categories
 
-    def _get_fd_limits(self, device_serial: str, pid: int) -> Dict:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            f"cat /proc/{pid}/limits 2>/dev/null | grep 'Max open files'"
-        )
+    def _get_fd_limits(self, ctx: InspectionContext) -> Dict:
+        result = ctx.read_proc_file("limits")
         if not result:
             return {}
 
         try:
-            parts = result.strip().split()
-            # Format: Max open files            1024                 1048576              files
-            soft_idx = None
-            hard_idx = None
+            for line in result.strip().split("\n"):
+                if "Max open files" in line:
+                    parts = line.strip().split()
+                    soft_idx = None
+                    hard_idx = None
 
-            for i, part in enumerate(parts):
-                if part.isdigit():
-                    if soft_idx is None:
-                        soft_idx = i
-                    else:
-                        hard_idx = i
-                        break
+                    for i, part in enumerate(parts):
+                        if part.isdigit():
+                            if soft_idx is None:
+                                soft_idx = i
+                            else:
+                                hard_idx = i
+                                break
 
-            if soft_idx is not None and hard_idx is not None:
-                return {
-                    "soft_limit": int(parts[soft_idx]),
-                    "hard_limit": int(parts[hard_idx]),
-                    "max_open_files": int(parts[hard_idx]),
-                }
+                    if soft_idx is not None and hard_idx is not None:
+                        return {
+                            "soft_limit": int(parts[soft_idx]),
+                            "hard_limit": int(parts[hard_idx]),
+                            "max_open_files": int(parts[hard_idx]),
+                        }
         except (ValueError, IndexError):
             pass
 
         return {}
 
-    def _check_fd_access(self, device_serial: str, pid: int) -> bool:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            f"ls /proc/{pid}/fd 2>&1 | head -1"
+    def _check_fd_access(self, ctx: InspectionContext) -> bool:
+        result = ctx.execute_command(
+            f"ls /proc/{ctx.pid}/fd 2>&1 | head -1",
+            cache_key="fd_access_check"
         )
         if not result:
             return False

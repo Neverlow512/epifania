@@ -2,7 +2,7 @@
 
 from typing import Dict, List, Optional, Set
 from core.logger import get_logger
-from core.adb_manager import ADBManager
+from device.contexts import InspectionContext
 import re
 
 logger = get_logger(__name__, "device")
@@ -36,19 +36,15 @@ UNIX_SOCKET_STATES = {
 
 
 class NetworkCollector:
-    def __init__(self, adb_manager: ADBManager):
-        self.adb_manager = adb_manager
-
-    def collect(self, device_serial: str, pid: int) -> Optional[Dict]:
+    def collect(self, ctx: InspectionContext) -> Optional[Dict]:
         try:
-            # Get socket inodes owned by this process
-            socket_inodes = self._get_process_socket_inodes(device_serial, pid)
+            socket_inodes = self._get_process_socket_inodes(ctx)
 
-            tcp_connections = self._get_tcp_connections(device_serial, socket_inodes)
-            tcp6_connections = self._get_tcp6_connections(device_serial, socket_inodes)
-            udp_connections = self._get_udp_connections(device_serial, socket_inodes)
-            udp6_connections = self._get_udp6_connections(device_serial, socket_inodes)
-            unix_sockets = self._get_unix_sockets(device_serial, socket_inodes)
+            tcp_connections = self._get_tcp_connections(ctx, socket_inodes)
+            tcp6_connections = self._get_tcp6_connections(ctx, socket_inodes)
+            udp_connections = self._get_udp_connections(ctx, socket_inodes)
+            udp6_connections = self._get_udp6_connections(ctx, socket_inodes)
+            unix_sockets = self._get_unix_sockets(ctx, socket_inodes)
 
             all_tcp = tcp_connections + tcp6_connections
             all_udp = udp_connections + udp6_connections
@@ -71,15 +67,11 @@ class NetworkCollector:
             }
 
         except Exception as e:
-            logger.error(f"Failed to collect network for PID {pid}: {str(e)}")
+            logger.error(f"Failed to collect network for PID {ctx.pid}: {str(e)}")
             return None
 
-    def _get_process_socket_inodes(self, device_serial: str, pid: int) -> Set[str]:
-        # Get all file descriptors and extract socket inodes
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            f"ls -la /proc/{pid}/fd 2>/dev/null | grep socket"
-        )
+    def _get_process_socket_inodes(self, ctx: InspectionContext) -> Set[str]:
+        result = ctx.list_directory(f"/proc/{ctx.pid}/fd")
         if not result:
             return set()
 
@@ -92,39 +84,24 @@ class NetworkCollector:
 
         return inodes
 
-    def _get_tcp_connections(self, device_serial: str, socket_inodes: Set[str]) -> List[Dict]:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            "cat /proc/net/tcp 2>/dev/null"
-        )
+    def _get_tcp_connections(self, ctx: InspectionContext, socket_inodes: Set[str]) -> List[Dict]:
+        result = ctx.read_system_file("/proc/net/tcp")
         return self._parse_tcp_output(result, socket_inodes, is_ipv6=False) if result else []
 
-    def _get_tcp6_connections(self, device_serial: str, socket_inodes: Set[str]) -> List[Dict]:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            "cat /proc/net/tcp6 2>/dev/null"
-        )
+    def _get_tcp6_connections(self, ctx: InspectionContext, socket_inodes: Set[str]) -> List[Dict]:
+        result = ctx.read_system_file("/proc/net/tcp6")
         return self._parse_tcp_output(result, socket_inodes, is_ipv6=True) if result else []
 
-    def _get_udp_connections(self, device_serial: str, socket_inodes: Set[str]) -> List[Dict]:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            "cat /proc/net/udp 2>/dev/null"
-        )
+    def _get_udp_connections(self, ctx: InspectionContext, socket_inodes: Set[str]) -> List[Dict]:
+        result = ctx.read_system_file("/proc/net/udp")
         return self._parse_udp_output(result, socket_inodes, is_ipv6=False) if result else []
 
-    def _get_udp6_connections(self, device_serial: str, socket_inodes: Set[str]) -> List[Dict]:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            "cat /proc/net/udp6 2>/dev/null"
-        )
+    def _get_udp6_connections(self, ctx: InspectionContext, socket_inodes: Set[str]) -> List[Dict]:
+        result = ctx.read_system_file("/proc/net/udp6")
         return self._parse_udp_output(result, socket_inodes, is_ipv6=True) if result else []
 
-    def _get_unix_sockets(self, device_serial: str, socket_inodes: Set[str]) -> List[Dict]:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            "cat /proc/net/unix 2>/dev/null"
-        )
+    def _get_unix_sockets(self, ctx: InspectionContext, socket_inodes: Set[str]) -> List[Dict]:
+        result = ctx.read_system_file("/proc/net/unix")
         return self._parse_unix_output(result, socket_inodes) if result else []
 
     def _parse_unix_output(self, output: str, socket_inodes: Set[str]) -> List[Dict]:

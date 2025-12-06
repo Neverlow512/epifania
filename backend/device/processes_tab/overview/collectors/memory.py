@@ -2,23 +2,20 @@
 
 from typing import Dict, Optional, Tuple
 from core.logger import get_logger
-from core.adb_manager import ADBManager
+from device.contexts import InspectionContext
 
 logger = get_logger(__name__, "device")
 
 
 class MemoryCollector:
-    def __init__(self, adb_manager: ADBManager):
-        self.adb_manager = adb_manager
-
-    def collect(self, device_serial: str, pid: int) -> Optional[Dict]:
+    def collect(self, ctx: InspectionContext) -> Optional[Dict]:
         try:
-            status_memory = self._get_status_memory(device_serial, pid)
+            status_memory = self._get_status_memory(ctx)
             if not status_memory:
                 return None
 
-            smaps_memory, smaps_available = self._get_smaps_rollup(device_serial, pid)
-            dumpsys_memory, dumpsys_available = self._get_dumpsys_meminfo(device_serial, pid)
+            smaps_memory, smaps_available = self._get_smaps_rollup(ctx)
+            dumpsys_memory, dumpsys_available = self._get_dumpsys_meminfo(ctx)
 
             result = {
                 "rss_kb": status_memory.get("rss_kb", 0),
@@ -52,14 +49,11 @@ class MemoryCollector:
             return result
 
         except Exception as e:
-            logger.error(f"Failed to collect memory for PID {pid}: {str(e)}")
+            logger.error(f"Failed to collect memory for PID {ctx.pid}: {str(e)}")
             return None
 
-    def _get_status_memory(self, device_serial: str, pid: int) -> Optional[Dict]:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            f"cat /proc/{pid}/status 2>/dev/null"
-        )
+    def _get_status_memory(self, ctx: InspectionContext) -> Optional[Dict]:
+        result = ctx.read_proc_file("status")
         if not result:
             return None
 
@@ -88,11 +82,8 @@ class MemoryCollector:
 
         return data if data else None
 
-    def _get_smaps_rollup(self, device_serial: str, pid: int) -> Tuple[Optional[Dict], bool]:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            f"cat /proc/{pid}/smaps_rollup 2>/dev/null"
-        )
+    def _get_smaps_rollup(self, ctx: InspectionContext) -> Tuple[Optional[Dict], bool]:
+        result = ctx.read_proc_file("smaps_rollup")
         if not result or "No such file" in result or "Permission denied" in result:
             return None, False
 
@@ -128,10 +119,10 @@ class MemoryCollector:
 
         return (data, True) if data else (None, False)
 
-    def _get_dumpsys_meminfo(self, device_serial: str, pid: int) -> Tuple[Optional[Dict], bool]:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            f"dumpsys meminfo {pid} 2>/dev/null | head -100"
+    def _get_dumpsys_meminfo(self, ctx: InspectionContext) -> Tuple[Optional[Dict], bool]:
+        result = ctx.execute_command(
+            f"dumpsys meminfo {ctx.pid} 2>/dev/null | head -100",
+            cache_key=f"dumpsys_meminfo_{ctx.pid}"
         )
         if not result or "No process found" in result or not result.strip():
             return None, False
@@ -157,7 +148,6 @@ class MemoryCollector:
 
             if "TOTAL" in line_stripped and not in_summary:
                 parts = line_stripped.split()
-                # TOTAL line format varies, try to extract PSS
                 for i, part in enumerate(parts):
                     if part == "TOTAL" and i + 1 < len(parts):
                         try:

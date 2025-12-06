@@ -257,7 +257,7 @@ export function useFeatureData(deviceSerial) {
 
 ### Rules
 
-1. **One session per device** - All tabs viewing same device share one session
+1. **One session per feature per device** - Each polling feature (Runtime Overview, Process Overview) maintains separate sessions per device
 2. **First tab is primary** - Controls the polling interval, makes actual requests
 3. **Secondary tabs read only** - Send heartbeats, wait for cache, can be promoted
 4. **Cache TTL = polling interval** - Serves concurrent requests in same tick
@@ -270,6 +270,88 @@ See `backend/device/processes_tab/monitoring/cache.py` and `frontend/src/views/d
 
 ---
 
+## Request-Scoped Context Pattern
+
+### Purpose
+
+Prevent duplicate ADB calls within a single request by caching command outputs at request scope. Used for operations that make multiple calls to fetch related data (e.g., process inspection reading same files multiple times).
+
+### When to Use
+
+Use request-scoped context when:
+- A single operation makes **10+ external calls**
+- Multiple collectors/modules need the **same data source** (e.g., `/proc/{pid}/status`)
+- Data must be **fresh per request** but **cached within the request**
+
+Do NOT use for:
+- Simple operations with < 5 calls
+- Data that should persist across requests (use feature-level cache instead)
+
+### Pattern
+
+**1. Create Context Class** (in `backend/device/contexts/`):
+- Request-scoped: instantiated per operation, dies when operation completes
+- Three cache dictionaries: process files, system files, commands
+- Methods check cache before executing external calls
+
+```python
+class InspectionContext:
+    def __init__(self, client, resource_id, has_elevated_access):
+        self.client = client
+        self.resource_id = resource_id
+        self.has_elevated_access = has_elevated_access
+        self._file_cache = {}
+        self._system_cache = {}
+        self._command_cache = {}
+    
+    def read_file(self, path, use_elevated=False):
+        key = f"{path}:elevated={use_elevated}"
+        if key not in self._file_cache:
+            # Make external call
+            self._file_cache[key] = self.client.read(path, elevated)
+        return self._file_cache[key]
+```
+
+**2. Update Orchestrator** (creates context, passes to collectors):
+```python
+def inspect_resource(self, resource_id, has_elevated_access):
+    ctx = InspectionContext(self.client, resource_id, has_elevated_access)
+    
+    # Pass context to all collectors
+    identity = self.identity_collector.collect(ctx)
+    details = self.details_collector.collect(ctx)
+    metadata = self.metadata_collector.collect(ctx)
+    
+    return combine_results(identity, details, metadata)
+```
+
+**3. Update Collectors** (stateless, accept context):
+```python
+class IdentityCollector:
+    def collect(self, ctx):
+        # Uses context methods instead of direct client calls
+        status = ctx.read_file(f"/path/{ctx.resource_id}/status")
+        info = ctx.read_file(f"/path/{ctx.resource_id}/info")
+        return parse_identity(status, info)
+```
+
+### Rules
+
+1. **Context is request-scoped** - Create new context per operation, let it die after
+2. **Collectors are stateless** - No stored client/manager, just accept context parameter
+3. **Cache within request only** - Context caches eliminate duplicates in single operation
+4. **Use with feature cache** - Pair with feature-level cache for multi-request persistence
+5. **Log cache hits** - `logger.debug("[CACHE HIT] /path/to/file")` for verification
+
+### Reference Implementation
+
+See `backend/device/contexts/inspection.py` and `backend/device/processes_tab/overview/process_inspector.py`
+
+**Before**: 15-20 external calls per inspection (duplicates: `/proc/{pid}/status` 3x, `/proc/{pid}/stat` 3x)  
+**After**: 12-16 external calls per inspection (~25% reduction from deduplication)
+
+---
+
 ## Summary
 
 - **Feature packages own their complete vertical slice**
@@ -279,4 +361,5 @@ See `backend/device/processes_tab/monitoring/cache.py` and `frontend/src/views/d
 - **Names are descriptive and follow language conventions**
 - **Three-layer pattern: Entry Point → Business Logic → Infrastructure**
 - **Polling features use session management + caching to prevent duplicate calls**
+- **Request-scoped contexts eliminate duplicates within single operations**
 

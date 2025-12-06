@@ -2,18 +2,15 @@
 
 from typing import Dict, Optional
 from core.logger import get_logger
-from core.adb_manager import ADBManager
+from device.contexts import InspectionContext
 
 logger = get_logger(__name__, "device")
 
 
 class IOStatsCollector:
-    def __init__(self, adb_manager: ADBManager):
-        self.adb_manager = adb_manager
-
-    def collect(self, device_serial: str, pid: int, has_root: bool = False) -> Optional[Dict]:
+    def collect(self, ctx: InspectionContext) -> Optional[Dict]:
         try:
-            io_data, error_reason = self._get_io_stats(device_serial, pid, has_root)
+            io_data, error_reason = self._get_io_stats(ctx)
             if not io_data:
                 if error_reason:
                     return {"available": False, "error": error_reason}
@@ -31,37 +28,23 @@ class IOStatsCollector:
             }
 
         except Exception as e:
-            logger.error(f"Failed to collect I/O stats for PID {pid}: {str(e)}")
+            logger.error(f"Failed to collect I/O stats for PID {ctx.pid}: {str(e)}")
             return None
 
-    def _get_io_stats(self, device_serial: str, pid: int, has_root: bool) -> tuple:
-        # First check if the io file exists at all (kernel support)
-        check_cmd = f"ls /proc/{pid}/io 2>&1"
-        check_result = self.adb_manager.execute_shell(device_serial, check_cmd)
+    def _get_io_stats(self, ctx: InspectionContext) -> tuple:
+        check_result = ctx.execute_command(
+            f"ls /proc/{ctx.pid}/io 2>&1",
+            cache_key="io_check"
+        )
         
         if check_result and "No such file" in check_result:
-            # Kernel doesn't have CONFIG_TASK_IO_ACCOUNTING enabled
             return None, "kernel_not_supported"
 
-        # Try with su first if we believe we have root
-        if has_root:
-            cmd = f"su -c 'cat /proc/{pid}/io' 2>&1"
-        else:
-            cmd = f"cat /proc/{pid}/io 2>&1"
+        result = ctx.read_proc_file("io", use_root=ctx.has_root)
 
-        result = self.adb_manager.execute_shell(device_serial, cmd)
-
-        # Check for permission denied
         if result and "Permission denied" in result:
-            # Try with su as fallback
-            result = self.adb_manager.execute_shell(
-                device_serial,
-                f"su -c 'cat /proc/{pid}/io' 2>&1"
-            )
-            if not result or "Permission denied" in result:
-                return None, "permission_denied"
+            return None, "permission_denied"
 
-        # Check for file not found (process may have died or kernel doesn't support)
         if result and "No such file" in result:
             return None, "kernel_not_supported"
 

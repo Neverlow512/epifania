@@ -2,47 +2,38 @@
 
 from typing import Dict, List, Optional
 from core.logger import get_logger
-from core.adb_manager import ADBManager
+from device.contexts import InspectionContext
 
 logger = get_logger(__name__, "device")
 
 
 class RelationshipsCollector:
-    def __init__(self, adb_manager: ADBManager):
-        self.adb_manager = adb_manager
-
-    def collect(self, device_serial: str, pid: int) -> Optional[Dict]:
+    def collect(self, ctx: InspectionContext) -> Optional[Dict]:
         try:
-            # Get parent info from the target process
-            parent_pid = self._get_parent_pid(device_serial, pid)
+            parent_pid = self._get_parent_pid(ctx)
             parent_info = None
-            if parent_pid and parent_pid != pid:
-                parent_info = self._get_process_basic_info(device_serial, parent_pid)
+            if parent_pid and parent_pid != ctx.pid:
+                parent_info = self._get_process_basic_info(ctx, parent_pid)
 
-            # Find children by scanning all processes
-            children = self._find_children(device_serial, pid)
+            children = self._find_children(ctx)
 
-            # Calculate tree depth (how many ancestors until init/pid 1)
-            tree_depth = self._calculate_tree_depth(device_serial, pid)
+            tree_depth = self._calculate_tree_depth(ctx)
 
             return {
                 "parent_pid": parent_pid,
                 "parent": parent_info,
                 "children_count": len(children),
-                "children": children[:50],  # Limit children list
+                "children": children[:50],
                 "tree_depth": tree_depth,
                 "truncated": len(children) > 50,
             }
 
         except Exception as e:
-            logger.error(f"Failed to collect relationships for PID {pid}: {str(e)}")
+            logger.error(f"Failed to collect relationships for PID {ctx.pid}: {str(e)}")
             return None
 
-    def _get_parent_pid(self, device_serial: str, pid: int) -> Optional[int]:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            f"cat /proc/{pid}/stat 2>/dev/null"
-        )
+    def _get_parent_pid(self, ctx: InspectionContext) -> Optional[int]:
+        result = ctx.read_proc_file("stat")
         if not result:
             return None
 
@@ -57,10 +48,10 @@ class RelationshipsCollector:
 
         return None
 
-    def _get_process_basic_info(self, device_serial: str, pid: int) -> Optional[Dict]:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            f"cat /proc/{pid}/stat 2>/dev/null"
+    def _get_process_basic_info(self, ctx: InspectionContext, pid: int) -> Optional[Dict]:
+        result = ctx.execute_command(
+            f"cat /proc/{pid}/stat 2>/dev/null",
+            cache_key=f"proc_stat_{pid}"
         )
         if not result:
             return None
@@ -82,11 +73,10 @@ class RelationshipsCollector:
         except (ValueError, IndexError):
             return {"pid": pid, "name": "", "state": ""}
 
-    def _find_children(self, device_serial: str, parent_pid: int) -> List[Dict]:
-        # Get all processes with their PPIDs in a single command
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            "cat /proc/[0-9]*/stat 2>/dev/null"
+    def _find_children(self, ctx: InspectionContext) -> List[Dict]:
+        result = ctx.execute_command(
+            "cat /proc/[0-9]*/stat 2>/dev/null",
+            cache_key="all_proc_stats"
         )
         if not result:
             return []
@@ -97,7 +87,6 @@ class RelationshipsCollector:
                 continue
 
             try:
-                # Parse: pid (name) state ppid ...
                 start = line.index("(")
                 end = line.rindex(")")
 
@@ -112,7 +101,7 @@ class RelationshipsCollector:
 
                 ppid = int(rest[1])
 
-                if ppid == parent_pid and pid != parent_pid:
+                if ppid == ctx.pid and pid != ctx.pid:
                     children.append({
                         "pid": pid,
                         "name": name,
@@ -125,9 +114,9 @@ class RelationshipsCollector:
         children.sort(key=lambda c: c["pid"])
         return children
 
-    def _calculate_tree_depth(self, device_serial: str, pid: int, max_depth: int = 20) -> int:
+    def _calculate_tree_depth(self, ctx: InspectionContext, max_depth: int = 20) -> int:
         depth = 0
-        current_pid = pid
+        current_pid = ctx.pid
 
         visited = set()
 
@@ -136,12 +125,28 @@ class RelationshipsCollector:
                 break
             visited.add(current_pid)
 
-            parent = self._get_parent_pid(device_serial, current_pid)
-            if parent is None or parent == current_pid:
+            temp_ctx_result = ctx.execute_command(
+                f"cat /proc/{current_pid}/stat 2>/dev/null",
+                cache_key=f"proc_stat_depth_{current_pid}"
+            )
+            
+            if not temp_ctx_result:
                 break
 
-            current_pid = parent
-            depth += 1
+            try:
+                line = temp_ctx_result.strip()
+                end = line.rindex(")")
+                rest = line[end + 2:].split()
+                if len(rest) > 1:
+                    parent = int(rest[1])
+                    if parent == current_pid:
+                        break
+                    current_pid = parent
+                    depth += 1
+                else:
+                    break
+            except (ValueError, IndexError):
+                break
 
         return depth
 

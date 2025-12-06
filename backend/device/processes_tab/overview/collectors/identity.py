@@ -3,7 +3,7 @@
 import re
 from typing import Dict, Optional
 from core.logger import get_logger
-from core.adb_manager import ADBManager
+from device.contexts import InspectionContext
 
 logger = get_logger(__name__, "device")
 
@@ -48,18 +48,15 @@ ANDROID_PROC_STATE_MAP = {
 
 
 class IdentityCollector:
-    def __init__(self, adb_manager: ADBManager):
-        self.adb_manager = adb_manager
-
-    def collect(self, device_serial: str, pid: int) -> Optional[Dict]:
+    def collect(self, ctx: InspectionContext) -> Optional[Dict]:
         try:
-            stat_data = self._parse_stat(device_serial, pid)
+            stat_data = self._parse_stat(ctx)
             if not stat_data:
                 return None
 
-            status_data = self._parse_status(device_serial, pid)
-            uptime = self._get_uptime(device_serial)
-            clock_ticks = self._get_clock_ticks(device_serial)
+            status_data = self._parse_status(ctx)
+            uptime = ctx.get_uptime()
+            clock_ticks = ctx.get_clock_ticks()
 
             running_seconds = None
             if uptime and clock_ticks and stat_data.get("starttime"):
@@ -70,12 +67,12 @@ class IdentityCollector:
                     running_seconds = None
 
             kernel_state = KERNEL_STATE_MAP.get(stat_data.get("state", ""), "unknown")
-            android_state = self._get_android_state(device_serial, pid)
+            android_state = self._get_android_state(ctx)
             name = stat_data.get("name", "")
             is_kernel_thread = name.startswith("[") and name.endswith("]")
 
             return {
-                "pid": pid,
+                "pid": ctx.pid,
                 "name": name,
                 "state": kernel_state,
                 "kernel_state": kernel_state,
@@ -92,18 +89,18 @@ class IdentityCollector:
                 "stime_ticks": stat_data.get("stime"),
                 "cpu_time_ticks": (stat_data.get("utime", 0) or 0) + (stat_data.get("stime", 0) or 0),
                 "running_seconds": running_seconds,
-                "cmdline": self._get_cmdline(device_serial, pid),
+                "cmdline": self._get_cmdline(ctx),
             }
 
         except Exception as e:
-            logger.error(f"Failed to collect identity for PID {pid}: {str(e)}")
+            logger.error(f"Failed to collect identity for PID {ctx.pid}: {str(e)}")
             return None
 
-    def _get_android_state(self, device_serial: str, pid: int) -> Optional[str]:
+    def _get_android_state(self, ctx: InspectionContext) -> Optional[str]:
         try:
-            result = self.adb_manager.execute_shell(
-                device_serial,
-                f"dumpsys activity processes 2>/dev/null | grep -A5 'pid={pid}[^0-9]' | head -10"
+            result = ctx.execute_command(
+                f"dumpsys activity processes 2>/dev/null | grep -A5 'pid={ctx.pid}[^0-9]' | head -10",
+                cache_key="dumpsys_processes"
             )
             if not result:
                 return None
@@ -117,20 +114,15 @@ class IdentityCollector:
 
             return None
         except Exception as e:
-            logger.debug(f"Failed to get Android state for PID {pid}: {e}")
+            logger.debug(f"Failed to get Android state for PID {ctx.pid}: {e}")
             return None
 
-    def _parse_stat(self, device_serial: str, pid: int) -> Optional[Dict]:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            f"cat /proc/{pid}/stat 2>/dev/null"
-        )
+    def _parse_stat(self, ctx: InspectionContext) -> Optional[Dict]:
+        result = ctx.read_proc_file("stat")
         if not result or not result.strip():
             return None
 
         line = result.strip()
-        # Format: pid (comm) state ppid pgrp session tty_nr tpgid flags ...
-        # comm can contain spaces and parentheses, so parse carefully
         try:
             start = line.index("(")
             end = line.rindex(")")
@@ -163,14 +155,11 @@ class IdentityCollector:
                 "starttime": int(rest[19]),
             }
         except (ValueError, IndexError) as e:
-            logger.debug(f"Failed to parse /proc/{pid}/stat: {e}")
+            logger.debug(f"Failed to parse /proc/{ctx.pid}/stat: {e}")
             return None
 
-    def _parse_status(self, device_serial: str, pid: int) -> Dict:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            f"cat /proc/{pid}/status 2>/dev/null"
-        )
+    def _parse_status(self, ctx: InspectionContext) -> Dict:
+        result = ctx.read_proc_file("status")
         if not result:
             return {}
 
@@ -198,34 +187,10 @@ class IdentityCollector:
 
         return data
 
-    def _get_uptime(self, device_serial: str) -> Optional[float]:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            "cat /proc/uptime 2>/dev/null"
-        )
-        if not result:
-            return None
-        try:
-            return float(result.strip().split()[0])
-        except (ValueError, IndexError):
-            return None
-
-    def _get_clock_ticks(self, device_serial: str) -> Optional[int]:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            "getconf CLK_TCK 2>/dev/null"
-        )
-        if not result:
-            return 100  # Default on most Linux systems
-        try:
-            return int(result.strip())
-        except ValueError:
-            return 100
-
-    def _get_cmdline(self, device_serial: str, pid: int) -> str:
-        result = self.adb_manager.execute_shell(
-            device_serial,
-            f"cat /proc/{pid}/cmdline 2>/dev/null | tr '\\0' ' '"
+    def _get_cmdline(self, ctx: InspectionContext) -> str:
+        result = ctx.execute_command(
+            f"cat /proc/{ctx.pid}/cmdline 2>/dev/null | tr '\\0' ' '",
+            cache_key="cmdline"
         )
         return result.strip() if result else ""
 
