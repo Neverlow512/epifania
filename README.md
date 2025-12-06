@@ -68,6 +68,8 @@ A GUI-based Dynamic Instrumentation Platform wrapping Frida and ADB for security
 - ✅ Process relationship tree (parent, children, tree depth)
 - ✅ Process Overview caching with configurable TTL
 - ✅ Separate polling session management for Process Overview panel
+- ✅ InspectionContext system for request-scoped ADB call deduplication during process inspection
+- ✅ Heartbeat-based session management for Process Overview polling
 
 **In Development:**
 - 🔄 Packages tab for application catalog and lifecycle control
@@ -688,6 +690,8 @@ GET /api/devices/{device_id}/processes/{pid}/overview
 
 Retrieves comprehensive process data using modular collectors. This is the primary endpoint for detailed process inspection.
 
+The endpoint uses an InspectionContext layer that deduplicates ADB calls within a single request. When multiple collectors need the same `/proc` file or system data, the context ensures it's only fetched once, significantly reducing ADB overhead during inspection.
+
 **Query Parameters:**
 - `force_refresh` (optional): Set to `true` to bypass cache and fetch fresh data
 
@@ -978,7 +982,7 @@ Returns current session status for a device.
 
 ### Process Overview Session Management
 
-Separate session management for the Process Overview panel, allowing independent polling control.
+Separate session management for the Process Overview panel, allowing independent polling control. Uses a heartbeat mechanism where secondary tabs send lightweight keep-alive signals every 5 seconds, with a 15-second timeout providing 3x safety margin for detecting stale sessions.
 
 #### Register Overview Session
 
@@ -986,13 +990,13 @@ Separate session management for the Process Overview panel, allowing independent
 POST /api/devices/{device_id}/overview/session/register
 ```
 
-Registers a browser tab for Process Overview polling. First client becomes primary.
+Registers a browser tab for Process Overview polling. First client becomes primary and controls the polling interval (default 10 seconds).
 
 **Request Body:**
 ```json
 {
   "client_id": "unique-tab-identifier",
-  "interval_ms": 5000
+  "interval_ms": 10000
 }
 ```
 
@@ -1001,8 +1005,30 @@ Registers a browser tab for Process Overview polling. First client becomes prima
 {
   "is_primary": true,
   "message": "Primary session established",
-  "active_interval_ms": 5000,
+  "active_interval_ms": 10000,
   "client_id": "unique-tab-identifier"
+}
+```
+
+#### Heartbeat Overview Session
+
+```
+POST /api/devices/{device_id}/overview/session/heartbeat
+```
+
+Sends a lightweight keep-alive signal to maintain session and detect primary promotion. Secondary tabs send heartbeats every 5 seconds. If the primary tab's session expires (15s timeout), a secondary tab is automatically promoted to primary.
+
+**Request Body:**
+```json
+{
+  "client_id": "unique-tab-identifier"
+}
+```
+
+**Response:**
+```json
+{
+  "active_interval_ms": 10000
 }
 ```
 
@@ -1596,6 +1622,9 @@ epifania/
 │   │   └── diagnostics.py        # ADB diagnostics system
 │   ├── device/                   # Device-specific feature modules
 │   │   ├── __init__.py
+│   │   ├── contexts/             # Request-scoped utilities
+│   │   │   ├── __init__.py
+│   │   │   └── inspection.py     # InspectionContext for ADB call deduplication
 │   │   └── processes_tab/        # Process monitoring module
 │   │       ├── __init__.py
 │   │       ├── routes.py         # Process API endpoints
@@ -1610,7 +1639,7 @@ epifania/
 │   │       └── overview/         # Process Overview inspection module
 │   │           ├── __init__.py
 │   │           ├── process_inspector.py # Orchestrator for all collectors
-│   │           ├── cache.py             # Overview caching and session management
+│   │           ├── cache.py             # Overview caching with heartbeat session management
 │   │           └── collectors/          # Modular data collectors
 │   │               ├── __init__.py
 │   │               ├── identity.py      # Process identity, scheduling, timing
@@ -1743,6 +1772,7 @@ The backend follows a modular architecture with clear separation of concerns:
 - `backend/core/logger.py`: Centralized logging with categorized output and rotating file handlers
 - `backend/core/diagnostics.py`: Comprehensive ADB diagnostics with multiple test suites
 - `backend/device/`: Feature modules for device-specific functionality
+  - `backend/device/contexts/inspection.py`: InspectionContext class for request-scoped ADB call deduplication; prevents multiple collectors from fetching the same `/proc` files or system data during a single process inspection
   - `backend/device/processes_tab/routes.py`: Process management API endpoints (list, details, kill, metrics, churn, system monitoring)
   - `backend/device/processes_tab/monitoring/dprocess_monitor.py`: Process monitoring class with ADB-based process enumeration, Android state classification via dumpsys, kernel thread detection, memory delta tracking, and churn tracking
   - `backend/device/processes_tab/monitoring/cpu_monitor.py`: CPU usage monitoring with `top` command parsing (with `ps` fallback) and top consumer tracking
@@ -1751,9 +1781,9 @@ The backend follows a modular architecture with clear separation of concerns:
   - `backend/device/processes_tab/monitoring/network_monitor.py`: Network throughput, connection tracking, and per-process TCP monitoring
   - `backend/device/processes_tab/monitoring/cache.py`: Thread-safe metrics caching (`MetricsCache`) and polling session management (`PollingSession`) for multi-tab consistency
 - `backend/device/processes_tab/overview/`: Process Overview inspection module
-  - `backend/device/processes_tab/overview/process_inspector.py`: Orchestrator that combines all collectors for comprehensive process data
-  - `backend/device/processes_tab/overview/cache.py`: Overview-specific caching with 5-second TTL and separate session management
-  - `backend/device/processes_tab/overview/collectors/`: Modular data collectors (identity, memory, threads, files, network, io_stats, relationships)
+  - `backend/device/processes_tab/overview/process_inspector.py`: Orchestrator that combines all collectors for comprehensive process data; creates and passes InspectionContext to all collectors
+  - `backend/device/processes_tab/overview/cache.py`: Overview-specific caching with 10-second TTL and heartbeat-based session management (15s timeout, 5s heartbeat interval)
+  - `backend/device/processes_tab/overview/collectors/`: Modular data collectors (identity, memory, threads, files, network, io_stats, relationships); all use InspectionContext to deduplicate ADB calls
 - `backend/frida_mgmt/manage/`: Frida server management modules (discovery, permissions, server lifecycle)
 - `backend/monitoring/health_manager.py`: Health monitoring system with periodic checks
 - `backend/monitoring/process_manager.py`: Process cleanup and PID file management
@@ -1816,10 +1846,11 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - `frontend/src/views/device/processes/composables/useProcesses.js`: Process fetching with auto-refresh and memory history tracking
 - `frontend/src/views/device/processes/composables/useProcessFilters.js`: Search, filter, sort, pagination, and kernel thread filtering logic
 - `frontend/src/views/device/processes/composables/useProcessActions.js`: Process termination actions
-- `frontend/src/views/device/processes/composables/useProcessOverview.js`: Process Overview state management with auto-refresh and session synchronization
+- `frontend/src/views/device/processes/composables/useProcessOverview.js`: Process Overview state management with auto-refresh and session synchronization (default 10-second polling)
+- `frontend/src/views/device/processes/composables/useOverviewPollingSession.js`: Heartbeat-based session management for Process Overview; sends lightweight keep-alive signals every 5 seconds to maintain session and detect primary promotion
 - `frontend/src/views/device/processes/composables/useProcessChurn.js`: Process spawn/kill event tracking
 - `frontend/src/views/device/processes/composables/useSystemMetrics.js`: System resource monitoring (CPU, memory, storage, network)
-- `frontend/src/views/device/processes/composables/usePollingSession.js`: Multi-tab session management with primary/secondary role tracking
+- `frontend/src/views/device/processes/composables/usePollingSession.js`: Multi-tab session management with primary/secondary role tracking for process list
 
 **Process Tab Components:**
 - `ProcessControlBar.vue`: Search, filter, sort controls with kernel thread toggle and Details help modal
@@ -1847,7 +1878,7 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - Tailwind CSS with DaisyUI components for consistent styling
 - Smart auto-streaming: ADB Operations, Frida Install, and Frida Server logs auto-start on page load
 - Manual logcat activation to prevent performance impact from verbose system logs
-- Optimized polling intervals: 15s for device details, 30s for Frida connection tests, 2s for process list
+- Optimized polling intervals: 15s for device details, 30s for Frida connection tests, 2s for process list, 10s for Process Overview
 - Direct GitHub API integration: Fetches latest 10 Frida releases client-side
 - Modal-based detail views: Comprehensive information accessible via modals including State Dictionary, CPU explanation, and Memory explanation
 - Reusable tab navigation component with keyboard accessibility
@@ -1858,7 +1889,9 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - Multi-tab consistency: Server-side caching ensures all browser tabs see identical metrics
 - Session management: Primary tab controls polling interval; secondary tabs show "Secondary" badge with disabled interval controls
 - Process Overview panel: Slide-in panel replaces modal for process inspection, integrated into Processes tab layout
-- Process Overview caching: 5-second TTL reduces ADB overhead; secondary tabs read from cache only
+- Process Overview caching: 10-second TTL matches polling interval for optimal data freshness; secondary tabs read from cache only
+- InspectionContext: Request-scoped caching layer that deduplicates ADB calls within a single process inspection; when multiple collectors need the same `/proc` file or system data, it's only fetched once
+- Heartbeat system: Secondary tabs send lightweight keep-alive signals every 5 seconds to maintain session and detect primary promotion (15-second timeout provides 3x safety margin)
 - Modular collector architecture: Each data type (identity, memory, threads, files, network, I/O, relationships) has its own collector class
 - Graceful degradation: Overview panel indicates data availability based on root access and Android version
 
