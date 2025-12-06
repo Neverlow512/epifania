@@ -289,10 +289,10 @@ class ADBManager:
         # Return a device wrapper object
         return DeviceWrapper(serial, self)
     
-    def execute_shell(self, serial: str, command: str) -> Optional[str]:
+    def execute_shell(self, serial: str, command: str, timeout: int = 30) -> Optional[str]:
         """Execute a shell command on the device"""
         try:
-            result = self._run_shell_command(serial, command)
+            result = self._run_shell_command(serial, command, timeout=timeout)
             if LOG_STREAMER_AVAILABLE:
                 log_streamer.add_log(serial, "adb_operations", f"shell: {command}", "debug")
             logger.debug(f"Executed command on {serial}: {command}")
