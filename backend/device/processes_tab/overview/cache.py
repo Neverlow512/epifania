@@ -87,8 +87,9 @@ class OverviewPollingSession:
             return 5000  # Default 5s for overview (less frequent than process list)
     
     def get_ttl(self, device_id: str) -> float:
+        # Returns cache TTL equal to polling interval
         interval_ms = self.get_interval(device_id)
-        return max(1.0, (interval_ms / 1000.0) * 0.8)
+        return max(1.0, interval_ms / 1000.0)
     
     def get_session_info(self, device_id: str) -> Optional[Dict]:
         with self._lock:

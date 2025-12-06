@@ -149,7 +149,11 @@ export function useProcessOverview(deviceSerial) {
     stopAutoRefresh()
     if (!autoRefresh.value || !expandedPid.value) return
     
-    // Both primary and secondary tabs poll, but secondary tabs only read from cache
+    // Only primary tab polls the backend
+    if (!isPrimary.value) {
+      return
+    }
+    
     refreshTimer = setInterval(() => {
       if (expandedPid.value) {
         refreshOverview()

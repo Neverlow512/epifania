@@ -1,5 +1,11 @@
 <template>
   <div class="space-y-4">
+    <div v-if="!isPrimary && sessionRegistered" class="bg-amber-500/20 border-l-4 border-amber-500 p-3 mb-4 rounded">
+      <p class="text-sm text-amber-700 dark:text-amber-300">
+        Secondary Tab - Viewing data controlled by primary tab (interval: {{ refreshInterval }}ms)
+      </p>
+    </div>
+
     <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
       <div class="lg:col-span-3">
         <div class="card bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20 h-full">
@@ -273,6 +279,7 @@ export default {
       memoryHistory,
       setRefreshInterval,
       isPrimary,
+      sessionRegistered,
       cpu,
       memory,
       storage,

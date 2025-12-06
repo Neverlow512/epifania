@@ -82,9 +82,10 @@ class PollingSession:
             return 2000
     
     def get_ttl(self, device_id: str) -> float:
-        # Returns cache TTL based on polling interval (slightly less than interval)
+        # Returns cache TTL based on polling interval
+        # TTL equals interval - cache serves concurrent requests in same tick only
         interval_ms = self.get_interval(device_id)
-        return max(0.5, (interval_ms / 1000.0) * 0.8)
+        return max(0.5, interval_ms / 1000.0)
     
     def unregister(self, device_id: str, client_id: str):
         with self._lock:

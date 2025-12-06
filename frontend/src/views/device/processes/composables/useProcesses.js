@@ -25,6 +25,7 @@ export function useProcesses(deviceSerial, options = {}) {
   const processHistory = ref([])
   const memoryHistory = ref([])
   let refreshTimer = null
+  let heartbeatTimer = null
   const maxHistoryPoints = 60
 
   // Sync local refreshInterval with session's activeIntervalMs
@@ -37,16 +38,23 @@ export function useProcesses(deviceSerial, options = {}) {
     }
   }, { immediate: true })
 
-  // Restart polling when primary status changes (to adjust interval for secondary tabs)
-  watch(isPrimary, () => {
+  // Restart polling when primary status changes
+  watch(isPrimary, (newIsPrimary) => {
     if (autoRefresh.value && sessionRegistered.value) {
-      startAutoRefresh()
+      if (newIsPrimary) {
+        // Just promoted to primary, start polling immediately
+        stopHeartbeatTimer()  // Stop the heartbeat-only timer
+        startAutoRefresh()
+      } else {
+        // Demoted to secondary, stop polling
+        stopAutoRefresh()
+      }
     }
   })
   
-  // Start auto-refresh once session is registered
+  // Start auto-refresh once session is registered (only for primary tabs)
   watch(sessionRegistered, (registered) => {
-    if (registered && autoRefresh.value) {
+    if (registered && autoRefresh.value && isPrimary.value) {
       startAutoRefresh()
     }
   })
@@ -122,16 +130,39 @@ export function useProcesses(deviceSerial, options = {}) {
 
   const startAutoRefresh = () => {
     stopAutoRefresh()
-    // Secondary tabs poll at 3x the interval to reduce load
-    // They'll still get fresh data from cache populated by primary
-    const effectiveInterval = isPrimary.value ? refreshInterval.value : refreshInterval.value * 3
-    refreshTimer = setInterval(refreshAll, effectiveInterval)
+    
+    // Only primary tab polls the backend
+    // Secondary tabs are read-only and don't make requests
+    if (!isPrimary.value) {
+      // Secondary tabs send periodic heartbeats to keep session alive
+      startHeartbeatTimer()
+      return
+    }
+    
+    refreshTimer = setInterval(refreshAll, refreshInterval.value)
   }
 
   const stopAutoRefresh = () => {
     if (refreshTimer) {
       clearInterval(refreshTimer)
       refreshTimer = null
+    }
+    stopHeartbeatTimer()
+  }
+
+  const startHeartbeatTimer = () => {
+    stopHeartbeatTimer()
+    // Send heartbeat every 5 seconds to keep session alive and detect promotion quickly
+    // Session timeout is 15s, so 5s keeps us well within the window
+    heartbeatTimer = setInterval(() => {
+      heartbeat()
+    }, 5000)
+  }
+
+  const stopHeartbeatTimer = () => {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer)
+      heartbeatTimer = null
     }
   }
 
