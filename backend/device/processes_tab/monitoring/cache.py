@@ -70,6 +70,17 @@ class PollingSession:
             
             if session["primary_client"] == client_id:
                 session["last_seen"] = current_time
+            else:
+                # Check if primary expired and promote this secondary
+                primary_last_seen = session["clients"].get(session["primary_client"])
+                if primary_last_seen and (current_time - primary_last_seen) > self._session_timeout:
+                    old_primary = session["primary_client"]
+                    session["primary_client"] = client_id
+                    session["last_seen"] = current_time
+                    logger.info(
+                        f"[RUNTIME PRIMARY PROMOTED] Device {device_id}: "
+                        f"{old_primary} (expired) -> {client_id} (now primary)"
+                    )
             
             return session["interval_ms"]
     

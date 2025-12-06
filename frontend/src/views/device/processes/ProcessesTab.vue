@@ -1,11 +1,5 @@
 <template>
   <div class="space-y-4">
-    <div v-if="!isPrimary && sessionRegistered" class="bg-amber-500/20 border-l-4 border-amber-500 p-3 mb-4 rounded">
-      <p class="text-sm text-amber-700 dark:text-amber-300">
-        Secondary Tab - Viewing data controlled by primary tab (interval: {{ refreshInterval }}ms)
-      </p>
-    </div>
-
     <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
       <div class="lg:col-span-3">
         <div class="card bg-neutral-900/60 backdrop-blur-sm shadow-xl border border-primary/20 h-full">
@@ -109,6 +103,7 @@
 </template>
 
 <script>
+import { computed, watch } from 'vue'
 import ProcessStatsBar from './components/ProcessStatsBar.vue'
 import ProcessControlBar from './components/ProcessControlBar.vue'
 import ProcessTable from './components/ProcessTable.vue'
@@ -136,7 +131,8 @@ export default {
       required: true
     }
   },
-  setup(props) {
+  emits: ['update:isPrimary', 'update:sessionActive'],
+  setup(props, { emit }) {
     const {
       cpu,
       memory,
@@ -266,6 +262,22 @@ export default {
     const handleUpdateOverviewInterval = (intervalMs) => {
       setOverviewRefreshInterval(intervalMs)
     }
+
+    // Computed properties for combined primary status
+    const isProcessesPrimary = computed(() => isPrimary.value)
+    const isOverviewPrimary = computed(() => overviewIsPrimary.value)
+    const isAnyPrimary = computed(() => isProcessesPrimary.value || isOverviewPrimary.value)
+    const isAnySessionActive = computed(() => sessionRegistered.value || overviewSessionRegistered.value)
+
+    // Emit primary status changes to parent
+    watch(isAnyPrimary, (value) => {
+      emit('update:isPrimary', value)
+    }, { immediate: true })
+
+    // Emit session active status to parent
+    watch(isAnySessionActive, (value) => {
+      emit('update:sessionActive', value)
+    }, { immediate: true })
 
     return {
       stats,

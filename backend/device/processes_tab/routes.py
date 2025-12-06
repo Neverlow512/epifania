@@ -35,7 +35,7 @@ class SessionRequest(BaseModel):
 
 class OverviewSessionRequest(BaseModel):
     client_id: str
-    interval_ms: int = 5000
+    interval_ms: int = 10000  # Default 10s for overview (heavy operation)
 
 
 @router.post("/{device_id}/session/register")
@@ -273,6 +273,40 @@ async def unregister_overview_session(device_id: str, request: OverviewSessionRe
         return {"success": True}
     except Exception as e:
         logger.error(f"Failed to unregister overview session: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{device_id}/overview/session/heartbeat")
+async def heartbeat_overview_session(device_id: str, request: OverviewSessionRequest):
+    # Lightweight keep-alive for overview polling sessions
+    # Secondary tabs use this to maintain session without full registration
+    try:
+        interval = overview_polling_session.heartbeat(device_id, request.client_id)
+        
+        if interval is None:
+            # Session doesn't exist or client not registered
+            raise HTTPException(
+                status_code=404, 
+                detail="Session not found - client must register first"
+            )
+        
+        # Check if this client was promoted to primary
+        session_info = overview_polling_session.get_session_info(device_id)
+        is_primary = (
+            session_info and 
+            session_info["primary_client"] == request.client_id
+        )
+        
+        return {
+            "success": True,
+            "interval_ms": interval,
+            "is_primary": is_primary
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to process overview heartbeat: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

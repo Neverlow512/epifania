@@ -61,6 +61,44 @@ class OverviewPollingSession:
             
             return False, "Secondary overview session", active_interval
     
+    def heartbeat(self, device_id: str, client_id: str) -> Optional[int]:
+        # Lightweight session keep-alive for secondary tabs
+        # Returns current interval or None if session doesn't exist
+        with self._lock:
+            session = self._sessions.get(device_id)
+            if not session:
+                return None
+            
+            current_time = time.time()
+            
+            # Update this client's last_seen timestamp
+            if client_id in session["clients"]:
+                session["clients"][client_id] = current_time
+            else:
+                # Client not registered - should register first
+                logger.warning(
+                    f"Heartbeat from unregistered overview client {client_id} "
+                    f"for device {device_id}"
+                )
+                return None
+            
+            # Only update session's last_seen if primary is heartbeating
+            if session["primary_client"] == client_id:
+                session["last_seen"] = current_time
+            else:
+                # Check if primary expired and promote this secondary
+                primary_last_seen = session["clients"].get(session["primary_client"])
+                if primary_last_seen and (current_time - primary_last_seen) > self._session_timeout:
+                    old_primary = session["primary_client"]
+                    session["primary_client"] = client_id
+                    session["last_seen"] = current_time
+                    logger.info(
+                        f"[OVERVIEW PRIMARY PROMOTED] Device {device_id}: "
+                        f"{old_primary} (expired) -> {client_id} (now primary)"
+                    )
+            
+            return session["interval_ms"]
+    
     def unregister(self, device_id: str, client_id: str):
         with self._lock:
             session = self._sessions.get(device_id)
@@ -84,7 +122,7 @@ class OverviewPollingSession:
             session = self._sessions.get(device_id)
             if session:
                 return session["interval_ms"]
-            return 5000  # Default 5s for overview (less frequent than process list)
+            return 10000  # Default 10s for overview (heavy ADB operation)
     
     def get_ttl(self, device_id: str) -> float:
         # Returns cache TTL equal to polling interval
@@ -154,10 +192,10 @@ class ProcessOverviewCache:
             
             if cached and (current_time - cached["timestamp"]) < cache_ttl:
                 age = current_time - cached["timestamp"]
-                logger.debug(f"Overview cache hit for {key}, age={age:.2f}s")
+                logger.info(f"[CACHE HIT] {key}, age={age:.2f}s, TTL={cache_ttl:.2f}s - Serving from cache, NO ADB CALLS")
                 return cached["value"], True, age
             
-            logger.debug(f"Overview cache miss for {key}, computing...")
+            logger.info(f"[CACHE MISS] {key}, TTL={cache_ttl:.2f}s - Computing fresh data, MAKING ADB CALLS")
             value = compute_fn()
             
             self._cache[key] = {
@@ -208,10 +246,11 @@ class ProcessOverviewCache:
 
 
 # Singleton instances for Process Overview
-# Session timeout should be short enough to handle tab reloads gracefully
-overview_polling_session = OverviewPollingSession(session_timeout=8.0)
+# Session timeout should be longer than heartbeat interval to handle missed beats
+# 15s timeout with 5s heartbeats provides 3x safety margin
+overview_polling_session = OverviewPollingSession(session_timeout=15.0)
 process_overview_cache = ProcessOverviewCache(
-    default_ttl=3.0, 
+    default_ttl=10.0,  # 10s default to match new interval
     polling_session=overview_polling_session
 )
 

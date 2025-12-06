@@ -28,7 +28,7 @@ class ProcessInspector:
 
     def inspect(self, device_serial: str, pid: int, has_root: bool = False) -> Optional[Dict]:
         try:
-            logger.info(f"Inspecting process {pid} on {device_serial} (root: {has_root})")
+            logger.info(f"[ADB INSPECTION START] Process {pid} on {device_serial} (root: {has_root})")
 
             identity = self.identity_collector.collect(device_serial, pid)
             if not identity:
@@ -41,6 +41,8 @@ class ProcessInspector:
             network = self.network_collector.collect(device_serial, pid)
             io_stats = self.io_collector.collect(device_serial, pid, has_root)
             relationships = self.relationships_collector.collect(device_serial, pid)
+            
+            logger.info(f"[ADB INSPECTION COMPLETE] Process {pid} - collected all data")
 
             permissions = self._build_permissions(
                 has_root=has_root,

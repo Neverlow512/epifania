@@ -41,6 +41,13 @@
             <div class="badge badge-sm" :class="getStatusBadge(device.state)">
               {{ device.state }}
             </div>
+            <div 
+              v-if="activeTab === 'processes' && processesSessionActive"
+              class="badge badge-sm"
+              :class="isProcessesPrimary ? 'badge-info' : 'badge-warning'"
+            >
+              {{ isProcessesPrimary ? 'Primary Tab' : 'Secondary Tab' }}
+            </div>
             <div class="text-slate-400 text-sm">SDK {{ device.sdk_version }}</div>
             <div class="text-sm" :class="device.has_root ? 'text-green-400' : 'text-red-400'">
               {{ device.has_root ? 'Root ✓' : 'No Root' }}
@@ -89,6 +96,8 @@
           :fridaConnected="fridaConnected"
           :testingConnection="testingConnection"
           :lastConnectionTest="lastConnectionTest"
+          @update:isPrimary="isProcessesPrimary = $event"
+          @update:sessionActive="processesSessionActive = $event"
           @reconnect-device="reconnectDevice"
           @refresh-status="refreshStatus"
           @load-cached-versions="loadCachedVersions"
@@ -186,6 +195,9 @@ export default {
     const fridaConnected = ref(false)
     const testingConnection = ref(false)
     const lastConnectionTest = ref('')
+    
+    const isProcessesPrimary = ref(false)
+    const processesSessionActive = ref(false)
     
     let processCheckInterval = null
     let connectionCheckInterval = null
@@ -642,6 +654,8 @@ export default {
       fridaConnected,
       testingConnection,
       lastConnectionTest,
+      isProcessesPrimary,
+      processesSessionActive,
       tabs,
       activeTab,
       currentTabComponent,

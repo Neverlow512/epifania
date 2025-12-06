@@ -153,6 +153,123 @@ frontend/src/views/device/packages/
 - Backend: Import routes in `main.py`
 - Frontend: Import `PackagesTab.vue` in `DeviceDetails.vue`, add to component map
 
+## Polling and Caching Pattern
+
+For any feature that polls external resources (ADB, APIs, hardware):
+
+### Backend
+
+**1. Polling Session** (`cache.py` in feature package):
+- **One session per device** - tracks which browser tab controls polling for that device
+- Tracks primary/secondary clients (client_id = browser tab identifier)
+- Session timeout: 15 seconds (3x heartbeat interval)
+- Returns active interval to all clients
+
+**2. Cache Layer** (`cache.py` in feature package):
+- TTL = polling interval (dynamic, from session)
+- Thread-safe with per-key locking
+- Returns cached data if fresh, otherwise computes
+
+**3. Entry Point** (routes):
+- Register/unregister session endpoints
+- Heartbeat endpoint for secondary tabs
+- Data endpoints use cache for actual requests
+
+**Pattern**:
+```python
+# In feature/cache.py
+polling_session = PollingSession(session_timeout=15.0)
+feature_cache = FeatureCache(polling_session=polling_session)
+
+# In feature/routes.py
+@router.post("/{device_id}/session/register")
+async def register_session(device_id: str, request: SessionRequest):
+    is_primary, message, active_interval = polling_session.register(
+        device_id, request.client_id, request.interval_ms
+    )
+    return {
+        "is_primary": is_primary,
+        "message": message,
+        "active_interval_ms": active_interval
+    }
+
+@router.get("/{device_id}/data")
+async def get_data(device_id: str):
+    def compute():
+        return expensive_operation(device_id)
+    
+    return feature_cache.get_or_compute(
+        key=f"data:{device_id}",
+        compute_fn=compute
+    )
+```
+
+### Frontend
+
+**1. Session Management** (`usePollingSession.js` or similar):
+- Generate unique client_id per composable instance (represents one browser tab)
+- Register on mount, unregister on unmount
+- Heartbeat every 5 seconds (for secondary tabs)
+- Handle promotion to primary when primary tab closes
+
+**2. Data Fetching** (`useFeatureData.js` or similar):
+- Primary tab: polls at interval, makes real requests
+- Secondary tabs: heartbeat only, no data requests
+- Watch isPrimary to start/stop polling
+- Watch activeIntervalMs to sync interval
+
+**Pattern**:
+```javascript
+export function useFeatureData(deviceSerial) {
+  const { isPrimary, activeIntervalMs, sessionRegistered, heartbeat } 
+    = usePollingSession(deviceSerial)
+  
+  const autoRefresh = ref(true)
+  const refreshInterval = ref(5000)
+  
+  // Sync interval from session
+  watch(activeIntervalMs, (newInterval) => {
+    if (newInterval !== refreshInterval.value) {
+      refreshInterval.value = newInterval
+      if (autoRefresh.value) startAutoRefresh()
+    }
+  })
+  
+  // Only primary polls
+  watch(isPrimary, (isPrim) => {
+    if (isPrim && autoRefresh.value) {
+      startAutoRefresh()
+    } else {
+      stopAutoRefresh()
+    }
+  })
+  
+  function startAutoRefresh() {
+    stopAutoRefresh()
+    if (!isPrimary.value) {
+      startHeartbeatTimer()  // Secondary: heartbeat only
+      return
+    }
+    refreshTimer = setInterval(fetchData, refreshInterval.value)
+  }
+}
+```
+
+### Rules
+
+1. **One session per device** - All tabs viewing same device share one session
+2. **First tab is primary** - Controls the polling interval, makes actual requests
+3. **Secondary tabs read only** - Send heartbeats, wait for cache, can be promoted
+4. **Cache TTL = polling interval** - Serves concurrent requests in same tick
+5. **15s session timeout** - Allows 3 missed heartbeats before expiry
+6. **5s heartbeat interval** - Fast promotion detection for secondary tabs
+
+### Reference Implementation
+
+See `backend/device/processes_tab/monitoring/cache.py` and `frontend/src/views/device/processes/composables/usePollingSession.js`
+
+---
+
 ## Summary
 
 - **Feature packages own their complete vertical slice**
@@ -161,4 +278,5 @@ frontend/src/views/device/packages/
 - **Business logic is independent of external interface (HTTP/UI/CLI)**
 - **Names are descriptive and follow language conventions**
 - **Three-layer pattern: Entry Point → Business Logic → Infrastructure**
+- **Polling features use session management + caching to prevent duplicate calls**
 
