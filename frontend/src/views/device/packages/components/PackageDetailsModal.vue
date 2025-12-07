@@ -230,7 +230,52 @@
                   </svg>
                 </button>
               </div>
-              <p class="text-xs text-slate-500 mt-1">Android signature reference ID</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <p class="text-xs text-slate-500">Android signature reference ID</p>
+                <div class="relative">
+                  <button
+                    type="button"
+                    ref="certTooltipBtn"
+                    class="btn btn-ghost btn-xs btn-circle text-violet-400 hover:text-violet-300 hover:bg-violet-500/10"
+                    title="What is this?"
+                    @click="toggleCertTooltip"
+                  >
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </button>
+                  <Teleport to="body">
+                    <Transition
+                      enter-active-class="transition-all duration-150 ease-out"
+                      enter-from-class="opacity-0 scale-95"
+                      enter-to-class="opacity-100 scale-100"
+                      leave-active-class="transition-all duration-100 ease-in"
+                      leave-from-class="opacity-100 scale-100"
+                      leave-to-class="opacity-0 scale-95"
+                    >
+                      <div
+                        v-if="showCertTooltip"
+                        class="fixed z-[100]"
+                        :style="certTooltipStyle"
+                      >
+                        <div class="card w-80 p-4 shadow-2xl bg-neutral-800 border border-violet-500/40 text-sm leading-relaxed">
+                          <p class="text-violet-200 mb-3">
+                            This is an internal Android reference ID derived from the app's signing certificate. It's used by the system to identify and track the certificate.
+                          </p>
+                          <p class="text-slate-400 text-xs">
+                            <span class="font-semibold text-amber-400">Note:</span> This is not the full certificate hash or fingerprint used for security verification.
+                          </p>
+                        </div>
+                      </div>
+                    </Transition>
+                    <div
+                      v-if="showCertTooltip"
+                      class="fixed inset-0 z-[99]"
+                      @click="showCertTooltip = false"
+                    ></div>
+                  </Teleport>
+                </div>
+              </div>
             </div>
           </section>
         </div>
@@ -289,13 +334,48 @@ export default {
   setup(props) {
     const toast = useToast()
     const showDetailsHelp = ref(false)
+    const showCertTooltip = ref(false)
+    const certTooltipBtn = ref(null)
+    const certTooltipStyle = ref({})
 
     const fullCertHash = computed(() => {
       if (!props.packageData?.signing_cert) return ''
       return props.packageData.signing_cert
     })
 
-    return { toast, showDetailsHelp, fullCertHash }
+    const toggleCertTooltip = () => {
+      if (!showCertTooltip.value && certTooltipBtn.value) {
+        const rect = certTooltipBtn.value.getBoundingClientRect()
+        const tooltipWidth = 320
+        const tooltipHeight = 140
+        
+        let top = rect.top - tooltipHeight - 8
+        let left = rect.left - tooltipWidth + 24
+        
+        if (top < 10) {
+          top = rect.bottom + 8
+        }
+        if (left < 10) {
+          left = 10
+        }
+        
+        certTooltipStyle.value = {
+          top: `${top}px`,
+          left: `${left}px`
+        }
+      }
+      showCertTooltip.value = !showCertTooltip.value
+    }
+
+    return { 
+      toast, 
+      showDetailsHelp, 
+      fullCertHash, 
+      showCertTooltip, 
+      certTooltipBtn, 
+      certTooltipStyle, 
+      toggleCertTooltip 
+    }
   },
   methods: {
     getPackageInitials() {

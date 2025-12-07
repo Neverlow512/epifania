@@ -21,6 +21,68 @@ class PackageManager:
         pattern = r'^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$'
         return bool(re.match(pattern, package_id))
     
+    def list_available_apks(self) -> List[Dict]:
+        """Scan for available APK files and split APK directories"""
+        apks = []
+        
+        # Default APK storage locations
+        search_paths = [
+            PROJECT_ROOT / "tmp" / "extracted_apks",
+            PROJECT_ROOT / "backend" / "tmp" / "extracted_apks"
+        ]
+        
+        for base_path in search_paths:
+            if not base_path.exists():
+                continue
+            
+            try:
+                for item in base_path.iterdir():
+                    if item.is_file() and item.suffix == '.apk':
+                        # Single APK file
+                        try:
+                            size_mb = item.stat().st_size / (1024 * 1024)
+                            apks.append({
+                                "path": str(item.relative_to(PROJECT_ROOT)),
+                                "name": item.stem,
+                                "type": "single",
+                                "size_mb": round(size_mb, 2),
+                                "file_count": 1,
+                                "modified": item.stat().st_mtime
+                            })
+                        except Exception as e:
+                            logger.warning(f"Failed to get info for {item}: {str(e)}")
+                    
+                    elif item.is_dir():
+                        # Check if it's a split APK directory
+                        apk_files = list(item.glob("*.apk"))
+                        if apk_files:
+                            try:
+                                total_size_mb = sum(f.stat().st_size for f in apk_files) / (1024 * 1024)
+                                has_base = any(f.name == "base.apk" for f in apk_files)
+                                has_splits = any(f.name.startswith("split_") for f in apk_files)
+                                
+                                apk_type = "split" if (has_base or has_splits) else "multiple"
+                                
+                                apks.append({
+                                    "path": str(item.relative_to(PROJECT_ROOT)),
+                                    "name": item.name,
+                                    "type": apk_type,
+                                    "size_mb": round(total_size_mb, 2),
+                                    "file_count": len(apk_files),
+                                    "modified": max(f.stat().st_mtime for f in apk_files)
+                                })
+                            except Exception as e:
+                                logger.warning(f"Failed to get info for {item}: {str(e)}")
+            
+            except Exception as e:
+                logger.warning(f"Failed to scan {base_path}: {str(e)}")
+        
+        # Sort by modified time (newest first)
+        apks.sort(key=lambda x: x["modified"], reverse=True)
+        
+        logger.info(f"Found {len(apks)} available APK(s)")
+        return apks
+    
     def _get_pid_for_package(self, device_serial: str, package_id: str) -> Optional[int]:
         try:
             result = self.adb_manager.execute_shell(device_serial, f"pidof {package_id}", timeout=5)
@@ -286,9 +348,14 @@ class PackageManager:
                     apk_source = str(PROJECT_ROOT / apk_source)
                 
                 if not os.path.exists(apk_source):
-                    logger.error(f"APK file not found: {apk_source}")
+                    logger.error(f"APK file/directory not found: {apk_source}")
                     return False
                 
+                # Handle split APK (directory with multiple APK files)
+                if os.path.isdir(apk_source):
+                    return self._install_split_apk(device_serial, apk_source)
+                
+                # Handle single APK file
                 if not apk_source.endswith('.apk'):
                     logger.error(f"File is not an APK: {apk_source}")
                     return False
@@ -344,6 +411,42 @@ class PackageManager:
             logger.error(f"Failed to install package: {str(e)}")
             raise
     
+    def _install_split_apk(self, device_serial: str, split_apk_dir: str) -> bool:
+        logger.info(f"Installing split APK from directory {split_apk_dir}")
+        
+        try:
+            # Find all APK files in the directory
+            apk_files = []
+            for file in os.listdir(split_apk_dir):
+                if file.endswith('.apk'):
+                    full_path = os.path.join(split_apk_dir, file)
+                    apk_files.append(full_path)
+            
+            if not apk_files:
+                logger.error(f"No APK files found in directory: {split_apk_dir}")
+                return False
+            
+            # Sort to ensure base.apk is first if it exists
+            apk_files.sort(key=lambda x: (not os.path.basename(x).startswith('base'), x))
+            
+            logger.info(f"Found {len(apk_files)} APK files to install")
+            
+            # Use adb install-multiple for split APKs
+            cmd = ['adb', '-s', device_serial, 'install-multiple', '-r'] + apk_files
+            
+            install_result = self.adb_manager._run_adb_command(cmd, timeout=180)
+            
+            if install_result.returncode == 0:
+                logger.info(f"Successfully installed split APK from {split_apk_dir}")
+                return True
+            else:
+                logger.error(f"Failed to install split APK: {install_result.stderr}")
+                return False
+        
+        except Exception as e:
+            logger.error(f"Failed to install split APK: {str(e)}")
+            raise
+    
     def uninstall_package(self, device_serial: str, package_id: str, keep_data: bool = False) -> bool:
         logger.info(f"Uninstalling {package_id} on {device_serial}, keep_data={keep_data}")
         
@@ -386,31 +489,72 @@ class PackageManager:
                 logger.error(f"Could not find APK path for {package_id}")
                 return None
             
-            device_apk_path = apk_path_result.replace("package:", "").strip()
+            # Parse all APK paths (handles split APKs / App Bundles)
+            apk_paths = []
+            for line in apk_path_result.strip().split("\n"):
+                if line.startswith("package:"):
+                    apk_paths.append(line.replace("package:", "").strip())
             
-            if not destination_path.endswith('.apk'):
-                destination_path = os.path.join(destination_path, f"{package_id}.apk")
+            if not apk_paths:
+                logger.error(f"No valid APK paths found for {package_id}")
+                return None
             
-            # Resolve relative paths from project root, not backend directory
-            if not os.path.isabs(destination_path):
-                destination_path = str(PROJECT_ROOT / destination_path)
+            # Resolve destination directory
+            if destination_path.endswith('.apk'):
+                dest_dir = os.path.dirname(destination_path)
+                base_name = os.path.basename(destination_path).replace('.apk', '')
             else:
-                destination_path = os.path.abspath(destination_path)
+                dest_dir = destination_path
+                base_name = package_id
             
-            dest_dir = os.path.dirname(destination_path)
+            if not os.path.isabs(dest_dir):
+                dest_dir = str(PROJECT_ROOT / dest_dir)
+            else:
+                dest_dir = os.path.abspath(dest_dir)
+            
             if dest_dir:
                 os.makedirs(dest_dir, exist_ok=True)
             
-            pull_result = self.adb_manager._run_adb_command(
-                ['adb', '-s', device_serial, 'pull', device_apk_path, destination_path],
-                timeout=120
-            )
+            # Single APK - simple pull
+            if len(apk_paths) == 1:
+                final_path = os.path.join(dest_dir, f"{base_name}.apk")
+                pull_result = self.adb_manager._run_adb_command(
+                    ['adb', '-s', device_serial, 'pull', apk_paths[0], final_path],
+                    timeout=120
+                )
+                
+                if pull_result.returncode == 0:
+                    logger.info(f"Successfully pulled {package_id} to {final_path}")
+                    return final_path
+                else:
+                    logger.error(f"Failed to pull package: {pull_result.stderr}")
+                    return None
             
-            if pull_result.returncode == 0:
-                logger.info(f"Successfully pulled {package_id} to {destination_path}")
-                return destination_path
+            # Split APK (App Bundle) - pull all parts to a subdirectory
+            split_dir = os.path.join(dest_dir, base_name)
+            os.makedirs(split_dir, exist_ok=True)
+            
+            pulled_files = []
+            for apk_path in apk_paths:
+                apk_name = os.path.basename(apk_path)
+                local_path = os.path.join(split_dir, apk_name)
+                
+                pull_result = self.adb_manager._run_adb_command(
+                    ['adb', '-s', device_serial, 'pull', apk_path, local_path],
+                    timeout=120
+                )
+                
+                if pull_result.returncode == 0:
+                    pulled_files.append(local_path)
+                    logger.debug(f"Pulled split APK: {apk_name}")
+                else:
+                    logger.warning(f"Failed to pull split APK {apk_name}: {pull_result.stderr}")
+            
+            if pulled_files:
+                logger.info(f"Successfully pulled {package_id} ({len(pulled_files)} split APKs) to {split_dir}")
+                return split_dir
             else:
-                logger.error(f"Failed to pull package: {pull_result.stderr}")
+                logger.error(f"Failed to pull any APK files for {package_id}")
                 return None
         
         except Exception as e:

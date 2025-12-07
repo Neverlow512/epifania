@@ -48,6 +48,14 @@
             <p class="text-xs text-slate-500 mt-1">
               Path relative to project root or absolute path
             </p>
+            <div class="alert alert-info bg-blue-500/10 border-blue-500/30 mt-2 p-2">
+              <svg class="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span class="text-xs text-blue-200">
+                Split APK apps will be extracted to a folder with all APK files
+              </span>
+            </div>
           </div>
 
           <div v-if="recentPaths.length > 0">

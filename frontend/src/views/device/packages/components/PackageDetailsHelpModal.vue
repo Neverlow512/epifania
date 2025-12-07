@@ -182,7 +182,7 @@
 
                   <div class="bg-black/40 rounded-lg p-3 border border-neutral-800">
                     <h5 class="text-white font-medium text-sm mb-1">Signing Certificate</h5>
-                    <p class="text-xs text-slate-400">SHA-256 hash of the signing certificate. Used to verify app authenticity and for security analysis. Click copy button to save.</p>
+                    <p class="text-xs text-slate-400">Internal Android reference ID derived from the app's signing certificate. Used by the system to identify and track the certificate. This is not the full certificate hash or fingerprint used for security verification.</p>
                   </div>
 
                   <div class="bg-black/40 rounded-lg p-3 border border-neutral-800">

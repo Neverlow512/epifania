@@ -144,32 +144,22 @@
                   <svg class="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                   </svg>
-                  <h4 class="text-lg font-semibold text-white">Filtering & Search</h4>
+                  <h4 class="text-lg font-semibold text-white">Search & Filtering</h4>
                 </div>
                 <div class="space-y-3">
                   <div class="bg-black/40 rounded-lg p-4 border border-neutral-800">
-                    <div class="flex items-center gap-2 mb-2">
-                      <span class="badge badge-sm badge-primary">User Packages</span>
-                      <span class="text-slate-400 text-sm">Default view, shows only user-installed apps</span>
-                    </div>
+                    <p class="text-sm text-slate-300 mb-2">
+                      <span class="font-medium text-white">Search:</span> Filter packages by name or package ID using the search box.
+                    </p>
                   </div>
                   <div class="bg-black/40 rounded-lg p-4 border border-neutral-800">
-                    <div class="flex items-center gap-2 mb-2">
-                      <span class="badge badge-sm badge-ghost">System Packages</span>
-                      <span class="text-slate-400 text-sm">Shows pre-installed system applications</span>
-                    </div>
-                  </div>
-                  <div class="bg-black/40 rounded-lg p-4 border border-neutral-800">
-                    <div class="flex items-center gap-2 mb-2">
-                      <span class="badge badge-sm badge-info">All Packages</span>
-                      <span class="text-slate-400 text-sm">Shows both user and system apps</span>
-                    </div>
+                    <p class="text-sm text-slate-300 mb-2">
+                      <span class="font-medium text-white">Sort:</span> Order packages by name (A-Z), size (largest first), or install date (newest first).
+                    </p>
                   </div>
                   <div class="bg-black/40 rounded-lg p-4 border border-neutral-800">
                     <p class="text-sm text-slate-300">
-                      <span class="font-medium text-white">Search:</span> Filter by package name or ID. 
-                      <span class="font-medium text-white">Sort:</span> Order by name, size, or install date. 
-                      <span class="font-medium text-white">Running Only:</span> Show only active applications.
+                      <span class="font-medium text-white">Running Only:</span> Toggle to show only currently active applications with running processes.
                     </p>
                   </div>
                 </div>

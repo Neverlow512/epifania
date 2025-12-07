@@ -56,17 +56,76 @@
 
           <div v-if="isLocalFile" class="space-y-3">
             <div>
-              <label class="text-sm text-slate-400 mb-1 block">APK File</label>
+              <label class="text-sm text-slate-400 mb-1 block">APK File or Folder</label>
               <div class="flex gap-2">
                 <input
                   type="text"
                   class="input input-sm input-bordered bg-neutral-800 border-neutral-700 text-white flex-1"
                   :value="localPath"
-                  placeholder="/path/to/app.apk"
+                  placeholder="/path/to/app.apk or /path/to/split_apks_folder"
                   @input="localPath = $event.target.value"
                 />
               </div>
-              <p class="text-xs text-slate-500 mt-1">Enter the full path to the APK file on your computer</p>
+              <p class="text-xs text-slate-500 mt-1">
+                Enter path to APK file or folder containing split APKs
+              </p>
+              <div class="alert alert-info bg-blue-500/10 border-blue-500/30 mt-2 p-2">
+                <svg class="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="text-xs text-blue-200">
+                  For split APKs, provide the folder path containing all APK files
+                </span>
+              </div>
+            </div>
+
+            <div v-if="availableApks.length > 0">
+              <label class="text-sm text-slate-400 mb-2 block">Available APKs</label>
+              <div class="max-h-48 overflow-y-auto space-y-2 border border-neutral-800 rounded-lg p-2 bg-neutral-800/50">
+                <div
+                  v-for="apk in availableApks"
+                  :key="apk.path"
+                  class="flex items-center gap-2 p-2 rounded hover:bg-neutral-700/50 cursor-pointer transition-colors"
+                  @click="selectAvailableApk(apk.path)"
+                >
+                  <div class="flex-shrink-0">
+                    <div
+                      v-if="apk.type === 'single'"
+                      class="w-8 h-8 rounded bg-violet-500/20 flex items-center justify-center"
+                    >
+                      <svg class="w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <div
+                      v-else
+                      class="w-8 h-8 rounded bg-blue-500/20 flex items-center justify-center"
+                    >
+                      <svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm text-white font-medium truncate">{{ apk.name }}</p>
+                    <p class="text-xs text-slate-500">
+                      <span v-if="apk.type === 'single'">Single APK</span>
+                      <span v-else>Split APK ({{ apk.file_count }} files)</span>
+                      · {{ apk.size_mb }} MB
+                    </p>
+                  </div>
+                  <div class="flex-shrink-0">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-else-if="loadingApks" class="text-center py-4">
+              <span class="loading loading-spinner loading-sm text-primary"></span>
+              <p class="text-xs text-slate-500 mt-2">Loading available APKs...</p>
             </div>
 
             <div v-if="recentPaths.length > 0">
@@ -148,6 +207,7 @@
 
 <script>
 import { ref, computed, watch } from 'vue'
+import axios from 'axios'
 
 export default {
   name: 'PackageInstallModal',
@@ -167,6 +227,10 @@ export default {
     recentPaths: {
       type: Array,
       default: () => []
+    },
+    deviceSerial: {
+      type: String,
+      required: true
     }
   },
   emits: ['close', 'install'],
@@ -175,6 +239,25 @@ export default {
     const localPath = ref('')
     const devicePath = ref('')
     const tempPath = ref(props.deviceTempPath)
+    const availableApks = ref([])
+    const loadingApks = ref(false)
+
+    const fetchAvailableApks = async () => {
+      if (!props.deviceSerial) return
+      
+      loadingApks.value = true
+      try {
+        const response = await axios.get(
+          `http://localhost:8000/api/devices/${props.deviceSerial}/packages/available-apks`
+        )
+        availableApks.value = response.data.apks || []
+      } catch (err) {
+        console.error('Failed to fetch available APKs:', err)
+        availableApks.value = []
+      } finally {
+        loadingApks.value = false
+      }
+    }
 
     watch(() => props.show, (newVal) => {
       if (newVal) {
@@ -182,6 +265,7 @@ export default {
         devicePath.value = ''
         tempPath.value = props.deviceTempPath
         isLocalFile.value = true
+        fetchAvailableApks()
       }
     })
 
@@ -198,6 +282,10 @@ export default {
       }
     }
 
+    const selectAvailableApk = (path) => {
+      localPath.value = path
+    }
+
     const handleInstall = () => {
       if (!canInstall.value) return
 
@@ -210,8 +298,11 @@ export default {
       localPath,
       devicePath,
       tempPath,
+      availableApks,
+      loadingApks,
       canInstall,
       selectRecentPath,
+      selectAvailableApk,
       handleInstall
     }
   }

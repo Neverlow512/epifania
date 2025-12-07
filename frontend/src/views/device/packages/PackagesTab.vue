@@ -79,6 +79,7 @@
       :installing="actionInProgress && actionType === 'install'"
       :deviceTempPath="deviceTempPath"
       :recentPaths="recentInstallPaths"
+      :deviceSerial="device.serial"
       @close="showInstallModal = false"
       @install="handleInstall"
     />
@@ -118,7 +119,7 @@
 
 <script>
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter } from 'vue-router'
 import PackageControlBar from './components/PackageControlBar.vue'
 import PackageTable from './components/PackageTable.vue'
 import PackageStatsBar from './components/PackageStatsBar.vue'
@@ -133,7 +134,7 @@ import { usePackageFilters } from './composables/usePackageFilters'
 import { usePackageDetails } from './composables/usePackageDetails'
 import { usePackageActions } from './composables/usePackageActions'
 import { usePackagePaths } from './composables/usePackagePaths'
-import { usePrimaryTab } from './composables/usePrimaryTab'
+import { usePackagePollingSession } from './composables/usePackagePollingSession'
 
 export default {
   name: 'PackagesTab',
@@ -157,21 +158,11 @@ export default {
   emits: ['update:packagesPrimary'],
   setup(props, { emit }) {
     const router = useRouter()
-    const route = useRoute()
 
-    const { isPrimary, setVisible } = usePrimaryTab()
+    const { isPrimary, sessionRegistered } = usePackagePollingSession(props.device.serial)
 
     watch(isPrimary, (value) => {
       emit('update:packagesPrimary', value)
-    }, { immediate: true })
-    
-    // Track when user navigates away from packages tab
-    watch(() => route.query.tab, (newTab) => {
-      if (newTab === 'packages' || !newTab) {
-        setVisible(true)
-      } else {
-        setVisible(false)
-      }
     }, { immediate: true })
 
     const {

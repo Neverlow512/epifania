@@ -3,6 +3,7 @@ from typing import Optional
 from pydantic import BaseModel
 from core.device_manager import DeviceManager
 from device.packages_tab.management.package_manager import PackageManager
+from device.packages_tab.management.cache import packages_polling_session
 from core.logger import get_logger
 
 logger = get_logger(__name__, "device")
@@ -13,6 +14,11 @@ device_manager = DeviceManager()
 package_manager = PackageManager(adb_manager=device_manager.adb_manager)
 
 
+class SessionRequest(BaseModel):
+    client_id: str
+    interval_ms: int = 5000
+
+
 class InstallRequest(BaseModel):
     apk_source: str
     is_local_file: bool = True
@@ -21,6 +27,52 @@ class InstallRequest(BaseModel):
 
 class PullRequest(BaseModel):
     destination_path: str
+
+
+@router.post("/{device_id}/packages/session/register")
+async def register_session(device_id: str, request: SessionRequest):
+    try:
+        if not device_manager.is_device_connected(device_id):
+            raise HTTPException(status_code=404, detail="Device not found")
+        
+        is_primary, message, active_interval = packages_polling_session.register(
+            device_id, request.client_id, request.interval_ms
+        )
+        
+        return {
+            "is_primary": is_primary,
+            "message": message,
+            "active_interval_ms": active_interval,
+            "client_id": request.client_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to register packages session for {device_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{device_id}/packages/session/unregister")
+async def unregister_session(device_id: str, request: SessionRequest):
+    try:
+        packages_polling_session.unregister(device_id, request.client_id)
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Failed to unregister packages session: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{device_id}/packages/session/info")
+async def get_session_info(device_id: str):
+    try:
+        info = packages_polling_session.get_session_info(device_id)
+        if not info:
+            return {"active": False}
+        return {"active": True, **info}
+    except Exception as e:
+        logger.error(f"Failed to get packages session info: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{device_id}/packages")
@@ -54,6 +106,28 @@ async def list_packages(device_id: str, filter: str = "all"):
         raise
     except Exception as e:
         logger.error(f"Failed to list packages for {device_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{device_id}/packages/available-apks")
+async def list_available_apks(device_id: str):
+    try:
+        logger.info(f"Available APKs list requested for device {device_id}")
+        
+        if not device_manager.is_device_connected(device_id):
+            raise HTTPException(status_code=404, detail="Device not found")
+        
+        apks = package_manager.list_available_apks()
+        
+        return {
+            "apks": apks,
+            "count": len(apks)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list available APKs: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -1,5 +1,5 @@
 <template>
-  <div class="dropdown dropdown-end" @click.stop>
+  <div class="dropdown dropdown-end dropdown-top" @click.stop>
     <label
       tabindex="0"
       class="btn btn-ghost btn-xs"
@@ -16,7 +16,7 @@
     </label>
     <ul
       tabindex="0"
-      class="dropdown-content z-[1] menu p-2 shadow-lg bg-neutral-800 border border-primary/30 rounded-box w-52"
+      class="dropdown-content z-[100] menu p-2 shadow-lg bg-neutral-800 border border-primary/30 rounded-box w-52"
     >
       <li v-if="pkg.is_running">
         <a
