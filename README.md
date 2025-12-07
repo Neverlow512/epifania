@@ -70,9 +70,16 @@ A GUI-based Dynamic Instrumentation Platform wrapping Frida and ADB for security
 - ✅ Separate polling session management for Process Overview panel
 - ✅ InspectionContext system for request-scoped ADB call deduplication during process inspection
 - ✅ Heartbeat-based session management for Process Overview polling
+- ✅ Packages tab with full application catalog and lifecycle management
+- ✅ Package listing with user/system filtering and running status detection
+- ✅ Package details inspection (version, SDK targets, permissions, sizes, signing certificate)
+- ✅ Package lifecycle actions (install, uninstall, launch, force stop)
+- ✅ APK extraction to local filesystem with path management
+- ✅ Cache and data clearing for installed packages
+- ✅ Multi-tab polling session management for Packages tab
+- ✅ Process integration linking running packages to Processes tab
 
 **In Development:**
-- 🔄 Packages tab for application catalog and lifecycle control
 - 🔄 Files tab for device filesystem browsing
 - 🔄 Workshop tab for script injection and active analysis
 
@@ -1108,6 +1115,295 @@ Retrieves detailed process spawn/kill event history.
 }
 ```
 
+### Package Management
+
+#### List Packages
+
+```
+GET /api/devices/{device_id}/packages?filter={type}
+```
+
+Retrieves all packages installed on the device with optional filtering.
+
+**Query Parameters:**
+- `filter` (optional): Package type filter - `"user"`, `"system"`, or `"all"` (default: `"all"`)
+
+**Response:**
+```json
+{
+  "packages": [
+    {
+      "package_id": "com.google.android.gm",
+      "name": "Gmail",
+      "is_system": false,
+      "pid": 12345,
+      "is_running": true,
+      "version": null,
+      "version_code": null,
+      "install_date": null,
+      "size_mb": null
+    }
+  ],
+  "count": 102,
+  "stats": {
+    "user": 7,
+    "system": 95,
+    "running": 19
+  }
+}
+```
+
+**Note:** List returns lightweight data for performance. Version and size are `null` - use the details endpoint for full metadata.
+
+#### Get Package Details
+
+```
+GET /api/devices/{device_id}/packages/{package_id}
+```
+
+Retrieves comprehensive metadata for a specific package.
+
+**Response:**
+```json
+{
+  "package_id": "com.google.android.gm",
+  "name": "Gmail",
+  "is_system": false,
+  "version": "2024.11.10.696147426.Release",
+  "version_code": 64865294,
+  "install_source": "com.android.vending",
+  "apk_path": "/data/app/.../base.apk",
+  "size_mb": 153.0,
+  "data_size_mb": 2.0,
+  "cache_size_mb": 0.5,
+  "permissions": ["android.permission.INTERNET", "..."],
+  "permissions_count": 20,
+  "target_sdk": 35,
+  "min_sdk": 23,
+  "signing_cert": "abc123...",
+  "main_activity": ".ui.MainActivity",
+  "pid": 12345,
+  "is_running": true
+}
+```
+
+#### Install Package
+
+```
+POST /api/devices/{device_id}/packages/install
+```
+
+Installs an APK from the local filesystem or device storage. Supports both single APK files and split APK directories (App Bundles).
+
+**Request Body:**
+```json
+{
+  "apk_source": "/home/user/Downloads/app.apk",
+  "is_local_file": true,
+  "device_temp_path": "/data/local/tmp/temp_install.apk"
+}
+```
+
+**Parameters:**
+- `apk_source`: Local file path, directory containing split APKs (if `is_local_file=true`), or device path (if `false`)
+- `is_local_file`: `true` = install from computer, `false` = install from device
+- `device_temp_path`: Staging path on device (optional, default: `/data/local/tmp/temp_install.apk`, ignored for split APKs)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Package installed successfully from /home/user/app.apk"
+}
+```
+
+**Split APK Installation:** When `apk_source` is a directory, Epifania automatically detects all `.apk` files within it and uses `adb install-multiple` for proper split APK installation.
+
+#### Uninstall Package
+
+```
+DELETE /api/devices/{device_id}/packages/{package_id}?keep_data={bool}
+```
+
+Removes a package from the device.
+
+**Query Parameters:**
+- `keep_data` (optional): `true` to preserve app data (default: `false`)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Package com.example.app uninstalled successfully"
+}
+```
+
+#### Extract APK
+
+```
+POST /api/devices/{device_id}/packages/{package_id}/pull
+```
+
+Extracts the APK file(s) from the device to the local filesystem. Automatically handles split APKs (App Bundles) by pulling all APK parts to a subdirectory.
+
+**Request Body:**
+```json
+{
+  "destination_path": "/home/user/Downloads/apps/com.example.app.apk"
+}
+```
+
+**Parameters:**
+- `destination_path`: Where to save APK locally (auto-creates directories, auto-appends `.apk` if directory)
+
+**Response (Single APK):**
+```json
+{
+  "success": true,
+  "message": "Package com.example.app pulled successfully",
+  "local_path": "/home/user/Downloads/apps/com.example.app.apk"
+}
+```
+
+**Response (Split APK / App Bundle):**
+```json
+{
+  "success": true,
+  "message": "Package com.example.app pulled successfully",
+  "local_path": "/home/user/Downloads/apps/com.example.app/"
+}
+```
+
+**Note:** For split APKs, the `local_path` points to a directory containing all APK parts (base.apk, split_config.arm64_v8a.apk, etc.).
+
+#### Launch Package
+
+```
+POST /api/devices/{device_id}/packages/{package_id}/launch
+```
+
+Launches the package's main activity.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Package com.example.app launched successfully"
+}
+```
+
+#### Force Stop Package
+
+```
+POST /api/devices/{device_id}/packages/{package_id}/stop
+```
+
+Force stops a running package.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Package com.example.app force stopped successfully"
+}
+```
+
+#### Clear Cache
+
+```
+POST /api/devices/{device_id}/packages/{package_id}/clear-cache
+```
+
+Clears the package's cache directory.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Cache cleared for com.example.app"
+}
+```
+
+#### Clear Data
+
+```
+POST /api/devices/{device_id}/packages/{package_id}/clear-data
+```
+
+Clears all package data (resets to fresh install state).
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Data cleared for com.example.app"
+}
+```
+
+### Packages Session Management
+
+Session management for the Packages tab, coordinating polling across multiple browser tabs.
+
+#### Register Packages Session
+
+```
+POST /api/devices/{device_id}/packages/session/register
+```
+
+Registers a browser tab for Packages polling. First client becomes primary and controls the polling interval.
+
+**Request Body:**
+```json
+{
+  "client_id": "unique-tab-identifier",
+  "interval_ms": 5000
+}
+```
+
+**Response:**
+```json
+{
+  "is_primary": true,
+  "message": "Primary session established",
+  "active_interval_ms": 5000,
+  "client_id": "unique-tab-identifier"
+}
+```
+
+#### Unregister Packages Session
+
+```
+POST /api/devices/{device_id}/packages/session/unregister
+```
+
+Unregisters a Packages polling session when a tab closes.
+
+**Request Body:**
+```json
+{
+  "client_id": "unique-tab-identifier",
+  "interval_ms": 5000
+}
+```
+
+#### Get Packages Session Info
+
+```
+GET /api/devices/{device_id}/packages/session/info
+```
+
+Returns current Packages session status for a device.
+
+**Response:**
+```json
+{
+  "active": true,
+  "primary_client": "tab-1234",
+  "interval_ms": 5000,
+  "client_count": 2
+}
+```
+
 ### System Monitoring
 
 #### Get CPU Usage
@@ -1476,8 +1772,40 @@ The device details interface is organized into tabbed sections for clear separat
 - Educational help modals explaining CPU metrics, memory metrics, and process list interpretation
 - Change detection for spawned, killed, and resource-intensive processes
 
+**Packages Tab:**
+- Package listing with filtering (user, system, all) and running status detection
+- Package statistics showing user, system, and running counts
+- Search functionality across package name and package ID
+- Sort by name, size, or install date
+- Running-only filter to show only active applications
+- Paginated package table with 50 packages per page
+- Package Details modal with comprehensive metadata:
+  - Version name and version code
+  - Install source (e.g., Play Store, sideloaded)
+  - APK path, size, data size, and cache size
+  - Full permissions list with count
+  - Target SDK and minimum SDK versions
+  - Android signature reference ID
+  - Main activity for launching
+  - Running status with PID (clickable link to Processes tab)
+- Package lifecycle actions:
+  - **Launch**: Start the application's main activity
+  - **Force Stop**: Terminate running application
+  - **Install**: Install APK from local filesystem or device storage
+  - **Uninstall**: Remove package with optional data preservation
+  - **Extract APK**: Pull APK to local filesystem
+  - **Clear Cache**: Remove cached data
+  - **Clear Data**: Reset to fresh install state (with confirmation)
+- Multi-tab session management with primary/secondary coordination
+- Help modal explaining package concepts and actions
+- Process integration: Click running package PID to navigate to Processes tab
+- **Split APK / App Bundle Support**:
+  - Automatic detection of split APKs (multiple APK files per package)
+  - Extraction pulls all split APK files to a dedicated subdirectory
+  - Installation supports both single APKs and split APK directories
+  - Uses `adb install-multiple` for proper split APK installation
+
 **Placeholder Tabs (In Development):**
-- **Packages**: Application catalog and lifecycle control
 - **Files**: Device filesystem browser
 - **Workshop**: Script injection and active analysis workspace
 
@@ -1625,6 +1953,13 @@ epifania/
 │   │   ├── contexts/             # Request-scoped utilities
 │   │   │   ├── __init__.py
 │   │   │   └── inspection.py     # InspectionContext for ADB call deduplication
+│   │   ├── packages_tab/         # Package management module
+│   │   │   ├── __init__.py
+│   │   │   ├── routes.py         # Package API endpoints
+│   │   │   └── management/       # Package management logic
+│   │   │       ├── __init__.py
+│   │   │       ├── cache.py      # Polling session management
+│   │   │       └── package_manager.py  # Package operations
 │   │   └── processes_tab/        # Process monitoring module
 │   │       ├── __init__.py
 │   │       ├── routes.py         # Process API endpoints
@@ -1713,8 +2048,27 @@ epifania/
 │   │   │       │       ├── useSystemMetrics.js
 │   │   │       │       ├── usePollingSession.js     # Multi-tab session management
 │   │   │       │       └── useProcessOverview.js    # Process Overview state and session management
-│   │   │       ├── packages/     # Package management (placeholder)
-│   │   │       │   └── PackagesTab.vue
+│   │   │       ├── packages/     # Package management tab
+│   │   │       │   ├── PackagesTab.vue
+│   │   │       │   ├── components/
+│   │   │       │   │   ├── PackageActionsMenu.vue
+│   │   │       │   │   ├── PackageClearDataModal.vue
+│   │   │       │   │   ├── PackageControlBar.vue
+│   │   │       │   │   ├── PackageDetailsHelpModal.vue
+│   │   │       │   │   ├── PackageDetailsModal.vue
+│   │   │       │   │   ├── PackageHelpModal.vue
+│   │   │       │   │   ├── PackageInstallModal.vue
+│   │   │       │   │   ├── PackagePullModal.vue
+│   │   │       │   │   ├── PackageStatsBar.vue
+│   │   │       │   │   ├── PackageTable.vue
+│   │   │       │   │   └── PackageUninstallModal.vue
+│   │   │       │   └── composables/
+│   │   │       │       ├── usePackageActions.js
+│   │   │       │       ├── usePackageDetails.js
+│   │   │       │       ├── usePackageFilters.js
+│   │   │       │       ├── usePackagePaths.js
+│   │   │       │       ├── usePackagePollingSession.js
+│   │   │       │       └── usePackages.js
 │   │   │       ├── files/        # File browser (placeholder)
 │   │   │       │   └── FilesTab.vue
 │   │   │       └── workshop/     # Analysis workspace (placeholder)
@@ -1773,6 +2127,9 @@ The backend follows a modular architecture with clear separation of concerns:
 - `backend/core/diagnostics.py`: Comprehensive ADB diagnostics with multiple test suites
 - `backend/device/`: Feature modules for device-specific functionality
   - `backend/device/contexts/inspection.py`: InspectionContext class for request-scoped ADB call deduplication; prevents multiple collectors from fetching the same `/proc` files or system data during a single process inspection
+  - `backend/device/packages_tab/routes.py`: Package management API endpoints (list, details, install, uninstall, launch, stop, clear, pull)
+  - `backend/device/packages_tab/management/package_manager.py`: Package operations class with validation, metadata extraction, and lifecycle management
+  - `backend/device/packages_tab/management/cache.py`: Polling session management for multi-tab coordination
   - `backend/device/processes_tab/routes.py`: Process management API endpoints (list, details, kill, metrics, churn, system monitoring)
   - `backend/device/processes_tab/monitoring/dprocess_monitor.py`: Process monitoring class with ADB-based process enumeration, Android state classification via dumpsys, kernel thread detection, memory delta tracking, and churn tracking
   - `backend/device/processes_tab/monitoring/cpu_monitor.py`: CPU usage monitoring with `top` command parsing (with `ps` fallback) and top consumer tracking
@@ -1830,7 +2187,7 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - `frontend/src/views/device/`: Feature-based tab modules with components and composables
   - `overview/DeviceTab.vue`: Device management interface with Frida controls, diagnostics, and log streaming
   - `processes/ProcessesTab.vue`: Process monitoring with real-time updates, system metrics, search, filter, and inspection
-  - `packages/PackagesTab.vue`: Placeholder for package management (in development)
+  - `packages/PackagesTab.vue`: Package management with listing, details, and lifecycle actions
   - `files/FilesTab.vue`: Placeholder for file browser (in development)
   - `workshop/WorkshopTab.vue`: Placeholder for analysis workspace (in development)
 
@@ -1851,6 +2208,12 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - `frontend/src/views/device/processes/composables/useProcessChurn.js`: Process spawn/kill event tracking
 - `frontend/src/views/device/processes/composables/useSystemMetrics.js`: System resource monitoring (CPU, memory, storage, network)
 - `frontend/src/views/device/processes/composables/usePollingSession.js`: Multi-tab session management with primary/secondary role tracking for process list
+- `frontend/src/views/device/packages/composables/usePackages.js`: Package listing with filtering and stats
+- `frontend/src/views/device/packages/composables/usePackageFilters.js`: Search, sort, and running-only filtering
+- `frontend/src/views/device/packages/composables/usePackageDetails.js`: Package details fetching and state
+- `frontend/src/views/device/packages/composables/usePackageActions.js`: Package lifecycle actions (install, uninstall, launch, stop, clear)
+- `frontend/src/views/device/packages/composables/usePackagePaths.js`: Path management for APK extraction and installation
+- `frontend/src/views/device/packages/composables/usePackagePollingSession.js`: Multi-tab session management for Packages tab
 
 **Process Tab Components:**
 - `ProcessControlBar.vue`: Search, filter, sort controls with kernel thread toggle and Details help modal
@@ -1866,6 +2229,19 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - `ProcessOverviewRelationships.vue`: Parent/children process tree with navigation
 - `ProcessOverviewDetailModal.vue`: Expandable detail modal for large data sets
 - `ProcessKillModal.vue`: Process termination confirmation dialog
+
+**Packages Tab Components:**
+- `PackageControlBar.vue`: Search, sort, filter controls with running-only toggle and help button
+- `PackageStatsBar.vue`: Package statistics display with install button
+- `PackageTable.vue`: Paginated package list with actions menu
+- `PackageActionsMenu.vue`: Dropdown menu for package actions
+- `PackageDetailsModal.vue`: Comprehensive package metadata display
+- `PackageDetailsHelpModal.vue`: Help modal explaining package details fields
+- `PackageInstallModal.vue`: APK installation dialog with path input
+- `PackageUninstallModal.vue`: Uninstall confirmation with keep-data option
+- `PackagePullModal.vue`: APK extraction dialog with destination path
+- `PackageClearDataModal.vue`: Data clearing confirmation dialog
+- `PackageHelpModal.vue`: Help modal explaining package concepts and actions
 
 **Technical Implementation:**
 - Vue 3 Composition API for reactive state management
@@ -1894,6 +2270,11 @@ The frontend uses Vue 3 Composition API with a component-based architecture:
 - Heartbeat system: Secondary tabs send lightweight keep-alive signals every 5 seconds to maintain session and detect primary promotion (15-second timeout provides 3x safety margin)
 - Modular collector architecture: Each data type (identity, memory, threads, files, network, I/O, relationships) has its own collector class
 - Graceful degradation: Overview panel indicates data availability based on root access and Android version
+- Packages tab session management: Server-side polling coordination with 15-second timeout and automatic primary promotion
+- Package ID validation: Regex pattern ensures valid Android package names before ADB operations
+- Batch PID detection: Single `ps` command fetches all running package PIDs for efficient running status detection
+- APK path resolution: Relative paths resolved from project root, not backend directory
+- Split APK handling: Automatic detection via `pm path` output parsing; uses `adb install-multiple` for installation and pulls all parts to subdirectory for extraction
 
 ### Dependency Management
 
@@ -2030,6 +2411,34 @@ The test suites provide comprehensive validation that all core components functi
 - PSS/USS metrics require Android 9+ (API 28) for smaps_rollup support
 - dumpsys meminfo only works for Android app processes, not native daemons
 - Check the "permissions" section in the Overview panel to see what data is available
+
+**Packages Tab Issues:**
+
+**Package List Not Loading:**
+- Verify device is connected and online
+- Check backend logs for ADB command failures
+- User packages load faster than system packages; try filtering to "User" first
+
+**Package Details Not Showing:**
+- Some system packages may have restricted access
+- Package may have been uninstalled since the list was fetched
+- Click refresh to update the package list
+
+**Install/Uninstall Failures:**
+- System packages cannot be uninstalled without root
+- Verify APK path exists and is readable
+- Check device has sufficient storage space
+- Some packages are protected by the system and cannot be modified
+
+**APK Extraction Fails:**
+- Verify destination directory is writable
+- Check available disk space on local machine
+- Some system APKs may have restricted access
+
+**Launch Package Fails:**
+- Package may not have a launchable activity (services, libraries)
+- Try force stopping the app first, then launching again
+- Check if the package is disabled
 
 **Logs Not Streaming:**
 - Most debug logs (ADB Operations, Frida Install, Frida Server) auto-start on page load

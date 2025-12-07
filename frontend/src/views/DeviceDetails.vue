@@ -48,6 +48,13 @@
             >
               {{ isProcessesPrimary ? 'Primary Tab' : 'Secondary Tab' }}
             </div>
+            <div 
+              v-if="activeTab === 'packages'"
+              class="badge badge-sm"
+              :class="isPackagesPrimary ? 'badge-info' : 'badge-warning'"
+            >
+              {{ isPackagesPrimary ? 'Primary Tab' : 'Secondary Tab' }}
+            </div>
             <div class="text-slate-400 text-sm">SDK {{ device.sdk_version }}</div>
             <div class="text-sm" :class="device.has_root ? 'text-green-400' : 'text-red-400'">
               {{ device.has_root ? 'Root ✓' : 'No Root' }}
@@ -98,6 +105,7 @@
           :lastConnectionTest="lastConnectionTest"
           @update:isPrimary="isProcessesPrimary = $event"
           @update:sessionActive="processesSessionActive = $event"
+          @update:packagesPrimary="isPackagesPrimary = $event"
           @reconnect-device="reconnectDevice"
           @refresh-status="refreshStatus"
           @load-cached-versions="loadCachedVersions"
@@ -198,6 +206,7 @@ export default {
     
     const isProcessesPrimary = ref(false)
     const processesSessionActive = ref(false)
+    const isPackagesPrimary = ref(false)
     
     let processCheckInterval = null
     let connectionCheckInterval = null
@@ -656,6 +665,7 @@ export default {
       lastConnectionTest,
       isProcessesPrimary,
       processesSessionActive,
+      isPackagesPrimary,
       tabs,
       activeTab,
       currentTabComponent,
