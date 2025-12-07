@@ -33,6 +33,10 @@ class PollingSession:
                 return True, "Primary session established", interval_ms
             
             session["clients"][client_id] = current_time
+            # TODO: Review - secondary clients updating last_seen may be unnecessary since
+            # promotion logic uses clients[primary_client] timestamp, not last_seen.
+            # last_seen is only used for clearing abandoned sessions. Consider restricting
+            # this update to primary client only for clearer semantics.
             session["last_seen"] = current_time
             
             primary_client = session["primary_client"]
