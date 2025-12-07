@@ -1,10 +1,14 @@
 import re
 import os
 from typing import List, Dict, Optional
+from pathlib import Path
 from core.logger import get_logger
 from core.adb_manager import ADBManager
 
 logger = get_logger(__name__, "device")
+
+# Get project root directory (5 levels up from this file: management/ -> packages_tab/ -> device/ -> backend/ -> project_root/)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 
 
 class PackageManager:
@@ -277,12 +281,13 @@ class PackageManager:
         
         try:
             if is_local_file:
+                # Resolve relative paths from project root, not backend directory
+                if not os.path.isabs(apk_source):
+                    apk_source = str(PROJECT_ROOT / apk_source)
+                
                 if not os.path.exists(apk_source):
                     logger.error(f"APK file not found: {apk_source}")
                     return False
-                
-                if not os.path.isabs(apk_source):
-                    apk_source = os.path.abspath(apk_source)
                 
                 if not apk_source.endswith('.apk'):
                     logger.error(f"File is not an APK: {apk_source}")
@@ -386,7 +391,11 @@ class PackageManager:
             if not destination_path.endswith('.apk'):
                 destination_path = os.path.join(destination_path, f"{package_id}.apk")
             
-            destination_path = os.path.abspath(destination_path)
+            # Resolve relative paths from project root, not backend directory
+            if not os.path.isabs(destination_path):
+                destination_path = str(PROJECT_ROOT / destination_path)
+            else:
+                destination_path = os.path.abspath(destination_path)
             
             dest_dir = os.path.dirname(destination_path)
             if dest_dir:
