@@ -51,6 +51,7 @@ package-lock.json
 *.swo
 *~
 .DS_Store
+.cursor/
 
 # OS
 Thumbs.db
