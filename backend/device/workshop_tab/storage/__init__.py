@@ -1,0 +1,2 @@
+# Storage layer - discovery persistence
+

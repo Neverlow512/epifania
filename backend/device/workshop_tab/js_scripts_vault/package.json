@@ -1,0 +1,16 @@
+{
+  "name": "js_scripts_vault",
+  "version": "1.0.0",
+  "description": "This directory contains all Frida JavaScript scripts used by the Workshop backend, organized by purpose.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "frida-java-bridge": "^7.0.10"
+  }
+}

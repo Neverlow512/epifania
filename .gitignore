@@ -39,6 +39,10 @@ pnpm-debug.log*
 dist/
 dist-ssr/
 *.local
+package-lock.json
+
+# Frida compiled scripts (generated from .ts files)
+*.compiled.js
 
 # IDE
 .vscode/
@@ -86,6 +90,7 @@ htmlcov/
 # Project-specific
 history_docs/
 backend/frida_servers/
+backend/workshop_data/
 tests/
 tmp/
 
