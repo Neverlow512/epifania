@@ -49,6 +49,14 @@ body {
   box-shadow: 0 0 0 3px rgba(113, 0, 208, 0.45);
 }
 
+.btn-accent {
+  background-color: rgba(87, 88, 223, 1);
+  color: var(--color-base-content);
+  border-width: 0px;
+  border-color: rgba(0, 0, 0, 0);
+  border-style: none;
+}
+
 .device-card {
   transition: all 0.3s ease;
 }
