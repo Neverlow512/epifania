@@ -1,0 +1,95 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap');
+
+@import "tailwindcss";
+@plugin "daisyui";
+
+@plugin "daisyui/theme" {
+  name: "epifania";
+  default: true;
+  --color-primary: #7100d0;
+  --color-secondary: #8b5cf6;
+  --color-accent: #22d3ee;
+  --color-neutral: #1a1a1a;
+  --color-base-100: #0a0a0a;
+  --color-base-200: #111111;
+  --color-base-300: #1a1a1a;
+  --color-info: #00bcd4;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+}
+
+:root {
+  --primary: #7100d0;
+  --primary-dark: #5b00a7;
+  --secondary: #8b5cf6;
+  --accent: #22d3ee;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.brand-title {
+  font-family: "Space Grotesk", system-ui, -apple-system, sans-serif;
+}
+
+.btn {
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.btn:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(113, 0, 208, 0.45);
+}
+
+.btn-accent {
+  background-color: rgba(87, 88, 223, 1);
+  color: var(--color-base-content);
+  border-width: 0px;
+  border-color: rgba(0, 0, 0, 0);
+  border-style: none;
+}
+
+.device-card {
+  transition: all 0.3s ease;
+}
+
+.device-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(113, 0, 208, 0.18);
+}
+
+.status-indicator {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.btn-instructions {
+  border-color: rgba(95, 95, 255, 1);
+}
+
+/* Ensure DaisyUI tooltips render above scroll containers/lists */
+.tooltip {
+  position: relative;
+  z-index: 1000000;
+}
+
+.tooltip:before,
+.tooltip:after {
+  z-index: 1000000 !important;
+}
