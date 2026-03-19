@@ -224,29 +224,29 @@ REST API for commands and queries, WebSocket for logs and live updates. The back
 Complete documentation is in the [Wiki](https://github.com/Neverlow512/epifania/wiki):
 
 **Getting Started:**
-- [Introduction](https://github.com/Neverlow512/epifania/wiki/Getting-Started---01.01-Introduction)
-- [Architecture Overview](https://github.com/Neverlow512/epifania/wiki/Getting-Started---01.02-Architecture-Overview)
+- [Introduction](https://github.com/Neverlow512/epifania/wiki/01.01-Getting-Started---Introduction)
+- [Architecture Overview](https://github.com/Neverlow512/epifania/wiki/01.02-Getting-Started---Architecture-Overview)
 - [Prerequisites](https://github.com/Neverlow512/epifania/wiki/Getting-Started---01.03-Prerequisites)
-- [Installation](https://github.com/Neverlow512/epifania/wiki/Getting-Started---01.04-Installation)
+- [Installation](https://github.com/Neverlow512/epifania/wiki/01.04-Getting-Started---Installation)
 - [Running the Application](https://github.com/Neverlow512/epifania/wiki/Getting-Started---01.05-Running-The-Application)
 
 **API Reference:**
-- [Device Management](https://github.com/Neverlow512/epifania/wiki/API---02.02-Device-Management)
-- [Frida Management](https://github.com/Neverlow512/epifania/wiki/API---02.03-Frida-Management)
-- [Process Management](https://github.com/Neverlow512/epifania/wiki/API---02.04-Process-Management)
-- [Package Management](https://github.com/Neverlow512/epifania/wiki/API---02.08-Package-Management)
-- [Workshop Management](https://github.com/Neverlow512/epifania/wiki/API---02.10-Workshop-Management)
-- [System Monitoring](https://github.com/Neverlow512/epifania/wiki/API---02.11-System-Monitoring)
+- [Device Management](https://github.com/Neverlow512/epifania/wiki/02.02-API---Device-Management)
+- [Frida Management](https://github.com/Neverlow512/epifania/wiki/02.03-API---Frida-Management)
+- [Process Management](https://github.com/Neverlow512/epifania/wiki/02.04-API---Process-Management)
+- [Package Management](https://github.com/Neverlow512/epifania/wiki/02.08-API---Package-Management)
+- [Workshop Management](https://github.com/Neverlow512/epifania/wiki/02.10-API---Workshop-Management)
+- [System Monitoring](https://github.com/Neverlow512/epifania/wiki/02.11-API---System-Monitoring)
 
 **Development:**
-- [Backend Development](https://github.com/Neverlow512/epifania/wiki/Development---06.01-Backend-Development)
-- [Frontend Development](https://github.com/Neverlow512/epifania/wiki/Development---06.04-Frontend-Development)
-- [Workshop Architecture](https://github.com/Neverlow512/epifania/wiki/Development---06.03-Workshop-Backend-Module-Architecture)
+- [Backend Development](https://github.com/Neverlow512/epifania/wiki/04.01-Development---Backend-Development)
+- [Frontend Development](https://github.com/Neverlow512/epifania/wiki/04.04-Development---Frontend-Development)
+- [Workshop Architecture](https://github.com/Neverlow512/epifania/wiki/04.03-Development---Workshop-Backend-Module-Architecture)
 
 **Troubleshooting:**
-- [Backend Issues](https://github.com/Neverlow512/epifania/wiki/Troubleshooting---07.01-Backend-Issues)
-- [Frontend Issues](https://github.com/Neverlow512/epifania/wiki/Troubleshooting---07.02-Frontend-Issues)
-- [Workshop Limitations](https://github.com/Neverlow512/epifania/wiki/Troubleshooting---07.04-Workshop-Tab-Known-Limitations)
+- [Backend Issues](https://github.com/Neverlow512/epifania/wiki/05.01-Troubleshooting---Backend-Issues)
+- [Frontend Issues](https://github.com/Neverlow512/epifania/wiki/05.02-Troubleshooting---Frontend-Issues)
+- [Workshop Limitations](https://github.com/Neverlow512/epifania/wiki/05.04-Troubleshooting---Workshop-Tab-Known-Limitations)
 
 ---
 
