@@ -8,7 +8,7 @@ A web-based GUI for Android dynamic instrumentation using Frida and ADB.
 ![Python](https://img.shields.io/badge/python-3.8+-blue)
 ![Node](https://img.shields.io/badge/node-18+-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
-
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Neverlow512/epifania)
 </div>
 
 ---
